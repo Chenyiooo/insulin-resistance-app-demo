@@ -28,6 +28,7 @@ from sklearn.calibration import calibration_curve
 from config import (
     DATA_PROCESSED_DIR, RESULTS_DIR, FIGURES_DIR, TABLES_DIR, MODELS_DIR,
     PREDICTOR_FEATURES, BINARY_TARGET, MULTICLASS_TARGET, SUBGROUPS,
+    DIETARY_NUTRIENTS,
 )
 
 warnings.filterwarnings("ignore")
@@ -74,6 +75,18 @@ FEATURE_DISPLAY_NAMES = {
     "gestational_diabetes": "Gestational Diabetes",
     "weight_change_pct": "Weight Change (%)", "waist_height_ratio": "Waist-Height Ratio",
 }
+
+for nutrient, label in DIETARY_NUTRIENTS.items():
+    FEATURE_DISPLAY_NAMES[f"diet_{nutrient}_avg"] = f"Diet {label}"
+    FEATURE_DISPLAY_NAMES[f"supp_{nutrient}"] = f"Supplement {label}"
+
+FEATURE_DISPLAY_NAMES.update({
+    "diet_recall_days": "Diet Recall Days",
+    "supplement_used": "Dietary Supplement Use",
+    "supplement_count": "# Dietary Supplements",
+    "antacid_used": "Antacid Use",
+    "antacid_count": "# Antacids",
+})
 
 
 def load_results():

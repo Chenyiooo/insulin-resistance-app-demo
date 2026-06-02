@@ -19,7 +19,7 @@ from config import (
     CYCLES, COMPONENT_BASES, DATA_RAW_DIR, DATA_PROCESSED_DIR,
     get_file_url, get_alternative_urls, VAR_HARMONIZE,
     PREDICTOR_FEATURES, BINARY_TARGET, MULTICLASS_TARGET,
-    FILE_NAME_OVERRIDES, RANDOM_STATE,
+    FILE_NAME_OVERRIDES, RANDOM_STATE, DIETARY_NUTRIENTS,
 )
 
 warnings.filterwarnings("ignore")
@@ -231,6 +231,47 @@ def engineer_features(df):
     else:
         df["alcohol_days_per_year"] = np.nan
 
+    # Dietary intake: average reliable Day 1 and Day 2 24-hour recalls.
+    for day in (1, 2):
+        status_col = f"diet_day{day}_recall_status"
+        if status_col in df.columns:
+            reliable = df[status_col] == 1
+            for nutrient in DIETARY_NUTRIENTS:
+                col = f"diet_day{day}_{nutrient}"
+                if col in df.columns:
+                    df.loc[~reliable, col] = np.nan
+
+    for nutrient in DIETARY_NUTRIENTS:
+        day_cols = [
+            f"diet_day{day}_{nutrient}"
+            for day in (1, 2)
+            if f"diet_day{day}_{nutrient}" in df.columns
+        ]
+        avg_col = f"diet_{nutrient}_avg"
+        df[avg_col] = df[day_cols].mean(axis=1, skipna=True) if day_cols else np.nan
+
+    # Dietary supplements: NHANES codes 1=Yes, 2=No, 7/9=unknown.
+    for col in ["supplement_used", "antacid_used"]:
+        if col in df.columns:
+            df[col] = df[col].map({1: 1, 2: 0}).where(df[col].isin([1, 2]))
+
+    for col in ["supplement_count", "antacid_count"]:
+        if col in df.columns:
+            df.loc[df[col].isin([77, 99, 777, 999]), col] = np.nan
+            df.loc[df[col] < 0, col] = np.nan
+
+    if "supplement_used" in df.columns:
+        no_supp = df["supplement_used"] == 0
+        supp_cols = [f"supp_{nutrient}" for nutrient in DIETARY_NUTRIENTS if f"supp_{nutrient}" in df.columns]
+        for col in supp_cols:
+            df.loc[no_supp & df[col].isna(), col] = 0
+        if "supplement_count" in df.columns:
+            df.loc[no_supp & df["supplement_count"].isna(), "supplement_count"] = 0
+
+    if "antacid_used" in df.columns and "antacid_count" in df.columns:
+        no_antacid = df["antacid_used"] == 0
+        df.loc[no_antacid & df["antacid_count"].isna(), "antacid_count"] = 0
+
     return df
 
 
@@ -256,6 +297,13 @@ def clean_features(df):
         if col in df.columns:
             df.loc[df[col] < lo, col] = np.nan
             df.loc[df[col] > hi, col] = np.nan
+
+    nonnegative_prefixes = ("diet_", "supp_")
+    for col in df.columns:
+        if col.startswith(nonnegative_prefixes) or col in {"supplement_count", "antacid_count"}:
+            if col in {"diet_day1_recall_status", "diet_day2_recall_status"}:
+                continue
+            df.loc[df[col] < 0, col] = np.nan
 
     return df
 

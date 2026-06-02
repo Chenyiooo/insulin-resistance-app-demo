@@ -8,7 +8,7 @@ This repository contains the full reproducible pipeline for the paper:
 
 ## Overview
 
-We develop and validate machine learning models for diabetes and prediabetes screening using **29 strictly non-invasive features** (self-report, anthropometry, home blood pressure) from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. No blood draws or laboratory tests are required.
+We develop and validate machine learning models for diabetes and prediabetes screening using **68 non-invasive features** (self-report, anthropometry, home blood pressure, dietary recall, and dietary supplement intake) from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. No blood draws or laboratory tests are required.
 
 **Key results:**
 - LightGBM achieves AUC = 0.820 (95% CI: 0.806--0.835), outperforming FINDRISC (0.745) and the ADA Risk Test (0.783)
@@ -26,7 +26,7 @@ We develop and validate machine learning models for diabetes and prediabetes scr
 ├── 05_regen_figures.py        # Regenerate publication-quality figures
 ├── run_pipeline.py            # Run the full pipeline end-to-end
 ├── requirements.txt           # Python dependencies
-├── features.md                # Documentation of all 29 features
+├── features.md                # Documentation of model features
 ├── data/
 │   ├── raw/                   # Downloaded NHANES XPT files (not tracked)
 │   └── processed/             # Processed parquet files + metadata
@@ -108,16 +108,18 @@ After applying inclusion criteria (age >= 18, non-pregnant, valid HbA1c), the fi
 | XGBoost | 0.816 | 0.800--0.831 |
 | **LightGBM** | **0.820** | **0.806--0.835** |
 
-## Non-Invasive Feature Set (29 features)
+## Non-Invasive Feature Set (68 configured features)
 
-All features can be collected in ~5 minutes without medical supervision:
+Core profile, measurement, and lifestyle features can be collected quickly without medical supervision. Dietary recall features come from NHANES Day 1 and Day 2 24-hour recalls; supplement features summarize mean daily intake over the prior 30 days.
 
 - **Demographics (5):** age, sex, race/ethnicity, education, income-to-poverty ratio
 - **Anthropometry (4):** BMI, waist circumference, weight, height
-- **Hemodynamics (2):** systolic BP, diastolic BP
+- **Hemodynamics (3):** systolic BP, diastolic BP, pulse
 - **Medical/family history (4):** family diabetes, hypertension, antihypertensive medication, high cholesterol
 - **Lifestyle (10):** smoking, alcohol (frequency + quantity), physical activity (4 types), sedentary time, sleep duration, sleep disturbance
-- **Derived (4):** waist-to-height ratio, 10-year weight change %, PHQ-9 depression score, gestational diabetes history
+- **Derived/profile (4):** waist-to-height ratio, 10-year weight change %, PHQ-9 depression score, gestational diabetes history
+- **Dietary recall (18):** number of recall days plus two-day average intake of energy, protein, carbohydrate, sugars, fiber, fats, cholesterol, sodium, potassium, calcium, magnesium, vitamin D, caffeine, and alcohol
+- **Dietary supplements/antacids (20):** use indicators, counts, and mean daily supplemental intake of selected nutrients
 
 ## License
 

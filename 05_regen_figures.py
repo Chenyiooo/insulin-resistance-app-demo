@@ -23,7 +23,7 @@ from sklearn.metrics import roc_auc_score
 
 from config import (
     DATA_PROCESSED_DIR, RESULTS_DIR, MODELS_DIR,
-    BINARY_TARGET, SUBGROUPS, RANDOM_STATE,
+    BINARY_TARGET, SUBGROUPS, RANDOM_STATE, DIETARY_NUTRIENTS,
 )
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "paper", "figures")
@@ -76,6 +76,18 @@ FEAT_NAMES = {
     "gestational_diabetes": "Gestational Diabetes Hx",
     "weight_change_pct": "10-yr Weight Change (%)", "waist_height_ratio": "Waist-to-Height Ratio",
 }
+
+for nutrient, label in DIETARY_NUTRIENTS.items():
+    FEAT_NAMES[f"diet_{nutrient}_avg"] = f"Diet {label}"
+    FEAT_NAMES[f"supp_{nutrient}"] = f"Supplement {label}"
+
+FEAT_NAMES.update({
+    "diet_recall_days": "Diet Recall Days",
+    "supplement_used": "Dietary Supplement Use",
+    "supplement_count": "# Dietary Supplements",
+    "antacid_used": "Antacid Use",
+    "antacid_count": "# Antacids",
+})
 
 
 def load_all():
