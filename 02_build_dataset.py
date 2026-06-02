@@ -3,7 +3,7 @@ Step 2: Build the analytic dataset from downloaded NHANES XPT files.
 - Read and harmonize variables across cycles
 - Merge files within each cycle on SEQN
 - Apply inclusion/exclusion criteria
-- Define outcome variable (HbA1c-based)
+- Define outcome variable (HOMA-IR-based insulin resistance)
 - Engineer features
 - Impute missing values
 - Save train/test splits
@@ -20,6 +20,7 @@ from config import (
     get_file_url, get_alternative_urls, VAR_HARMONIZE,
     PREDICTOR_FEATURES, BINARY_TARGET, MULTICLASS_TARGET,
     FILE_NAME_OVERRIDES, RANDOM_STATE, DIETARY_NUTRIENTS,
+    HOMA_IR_TARGET, HOMA_IR_THRESHOLD,
 )
 
 warnings.filterwarnings("ignore")
@@ -130,6 +131,14 @@ def apply_criteria(df):
     """Apply study inclusion/exclusion criteria."""
     flow = {"initial": len(df)}
 
+    required_labs = ["fasting_glucose_mmol_l", "fasting_insulin_miu_l"]
+    missing_labs = [col for col in required_labs if col not in df.columns]
+    if missing_labs:
+        raise RuntimeError(
+            "Missing fasting lab variables required for HOMA-IR target: "
+            f"{missing_labs}. Run 01_download_data.py to fetch GLU and INS files."
+        )
+
     # Must be 18+
     df = df[df["age"] >= 18].copy()
     flow["age_18plus"] = len(df)
@@ -139,13 +148,18 @@ def apply_criteria(df):
         df = df[~(df["pregnant"] == 1)].copy()
     flow["non_pregnant"] = len(df)
 
-    # Must have HbA1c
-    df = df[df["hba1c"].notna()].copy()
-    flow["has_hba1c"] = len(df)
+    # Must have fasting glucose and insulin for HOMA-IR target construction.
+    df = df[df["fasting_glucose_mmol_l"].notna()].copy()
+    flow["has_fasting_glucose"] = len(df)
 
-    # Exclude extreme/implausible HbA1c (< 3% or > 20%)
-    df = df[(df["hba1c"] >= 3.0) & (df["hba1c"] <= 20.0)].copy()
-    flow["valid_hba1c"] = len(df)
+    df = df[df["fasting_insulin_miu_l"].notna()].copy()
+    flow["has_fasting_insulin"] = len(df)
+
+    # Exclude non-positive or implausible fasting lab values.
+    valid_glucose = (df["fasting_glucose_mmol_l"] > 0) & (df["fasting_glucose_mmol_l"] <= 40)
+    valid_insulin = (df["fasting_insulin_miu_l"] > 0) & (df["fasting_insulin_miu_l"] <= 1000)
+    df = df[valid_glucose & valid_insulin].copy()
+    flow["valid_homa_labs"] = len(df)
 
     return df, flow
 
@@ -153,21 +167,26 @@ def apply_criteria(df):
 # ── Define outcome variables ──
 
 def define_outcomes(df):
-    """Create diabetes outcome variables based on HbA1c and self-report."""
-    # Three-class: 0=normal, 1=prediabetes, 2=diabetes
-    conditions = [
-        df["hba1c"] < 5.7,
-        (df["hba1c"] >= 5.7) & (df["hba1c"] < 6.5),
-        df["hba1c"] >= 6.5,
-    ]
-    df[MULTICLASS_TARGET] = np.select(conditions, [0, 1, 2], default=np.nan)
+    """Create HOMA-IR insulin resistance target and optional diabetes metadata."""
+    df[HOMA_IR_TARGET] = (
+        df["fasting_glucose_mmol_l"] * df["fasting_insulin_miu_l"]
+    ) / 22.5
 
-    # Also mark self-reported diabetes as diabetes
+    # Binary HOMA-IR insulin resistance target: 0=not IR, 1=IR.
+    df[BINARY_TARGET] = (df[HOMA_IR_TARGET] > HOMA_IR_THRESHOLD).astype(int)
+
+    # Optional three-class diabetes metadata when HbA1c is available.
+    df[MULTICLASS_TARGET] = np.nan
+    if "hba1c" in df.columns:
+        conditions = [
+            df["hba1c"] < 5.7,
+            (df["hba1c"] >= 5.7) & (df["hba1c"] < 6.5),
+            df["hba1c"] >= 6.5,
+        ]
+        df[MULTICLASS_TARGET] = np.select(conditions, [0, 1, 2], default=np.nan)
+
     if "diabetes_self_report" in df.columns:
         df.loc[df["diabetes_self_report"] == 1, MULTICLASS_TARGET] = 2
-
-    # Binary: 0=normal, 1=at-risk (prediabetes + diabetes)
-    df[BINARY_TARGET] = (df[MULTICLASS_TARGET] >= 1).astype(int)
 
     return df
 
@@ -411,10 +430,21 @@ def build_dataset():
     print(f"\n  Train set: {len(train)} ({train[BINARY_TARGET].mean():.1%} positive)")
     print(f"  Test set:  {len(test)} ({test[BINARY_TARGET].mean():.1%} positive)")
 
-    # Class distribution
+    # Target distribution
     for name, subset in [("Train", train), ("Test", test)]:
-        dist = subset[MULTICLASS_TARGET].value_counts().sort_index()
-        print(f"\n  {name} class distribution:")
+        dist = subset[BINARY_TARGET].value_counts().sort_index()
+        print(f"\n  {name} HOMA-IR target distribution:")
+        labels = {0: f"No IR (HOMA-IR <= {HOMA_IR_THRESHOLD})",
+                  1: f"IR (HOMA-IR > {HOMA_IR_THRESHOLD})"}
+        for cls, count in dist.items():
+            print(f"    {labels.get(cls, cls):28s}: {count:>6d} ({count/len(subset):.1%})")
+
+    # Diabetes metadata distribution, when HbA1c is available.
+    for name, subset in [("Train", train), ("Test", test)]:
+        dist = subset[MULTICLASS_TARGET].dropna().value_counts().sort_index()
+        if dist.empty:
+            continue
+        print(f"\n  {name} HbA1c diabetes metadata distribution:")
         labels = {0: "Normal", 1: "Prediabetes", 2: "Diabetes"}
         for cls, count in dist.items():
             print(f"    {labels.get(cls, cls):15s}: {count:>6d} ({count/len(subset):.1%})")

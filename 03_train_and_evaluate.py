@@ -1,6 +1,6 @@
 """
 Step 3: Train ML models, evaluate, SHAP analysis, and subgroup analysis.
-- Traditional baselines: FINDRISC (approx), ADA Risk Test, Logistic Regression
+- Traditional baselines: FINDRISC (approx), ADA Risk Test
 - ML models: Random Forest, XGBoost, LightGBM, SVM, MLP
 - Evaluation: AUC, AUPRC, Sensitivity, Specificity, F1, Bootstrap CIs
 - SHAP explainability analysis
@@ -37,7 +37,7 @@ import shap
 from config import (
     DATA_PROCESSED_DIR, RESULTS_DIR, FIGURES_DIR, TABLES_DIR, MODELS_DIR,
     PREDICTOR_FEATURES, BINARY_TARGET, MULTICLASS_TARGET,
-    SUBGROUPS, RANDOM_STATE,
+    SUBGROUPS, RANDOM_STATE, HOMA_IR_THRESHOLD,
 )
 
 warnings.filterwarnings("ignore")
@@ -534,7 +534,7 @@ def save_results(all_results, shap_data, subgroup_results, trained_models, scale
 
 def main():
     print("=" * 60)
-    print("  Model Training & Evaluation Pipeline")
+    print("  Insulin Resistance Model Training & Evaluation Pipeline")
     print("=" * 60)
 
     # Load data
@@ -545,6 +545,7 @@ def main():
     X_test, y_test = test, test[BINARY_TARGET].values
 
     print(f"\n  Features ({len(features)}): {features}")
+    print(f"  Target: {BINARY_TARGET} (1 = HOMA-IR > {HOMA_IR_THRESHOLD})")
     print(f"  Train: {len(X_train)}, Test: {len(X_test)}")
     print(f"  Train prevalence: {y_train.mean():.3f}, Test prevalence: {y_test.mean():.3f}")
 

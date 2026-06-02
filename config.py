@@ -34,6 +34,8 @@ COMPONENT_BASES = {
     "DR1TOT": "DR1TOT",
     "DR2TOT": "DR2TOT",
     "DSQTOT": "DSQTOT",
+    "GLU": "GLU",
+    "INS": "INS",
     "DIQ": "DIQ",
     "MCQ": "MCQ",
     "BPQ": "BPQ",
@@ -134,6 +136,11 @@ VAR_HARMONIZE = {
 
     # Glycohemoglobin
     "hba1c": ["LBXGH"],
+
+    # Fasting glucose and insulin for HOMA-IR target construction
+    "fasting_glucose_mmol_l": ["LBDGLUSI"],
+    "fasting_insulin_miu_l": ["LBXIN"],
+    "fasting_weight": ["WTSAFPRP"],
 
     # Dietary recall metadata
     "diet_recall_days": ["DRDINT"],
@@ -298,8 +305,10 @@ PREDICTOR_FEATURES = [
     "supp_caffeine_mg",
 ]
 
-BINARY_TARGET = "diabetes_binary"      # 0=normal, 1=prediabetes+diabetes
-MULTICLASS_TARGET = "diabetes_status"  # 0=normal, 1=prediabetes, 2=diabetes
+HOMA_IR_TARGET = "homa_ir"
+HOMA_IR_THRESHOLD = 2.5
+BINARY_TARGET = "insulin_resistance_binary"  # 0=HOMA-IR <=2.5, 1=HOMA-IR >2.5
+MULTICLASS_TARGET = "diabetes_status"        # metadata: 0=normal, 1=prediabetes, 2=diabetes
 
 # ── Age/Sex/Race subgroups for fairness analysis ──
 SUBGROUPS = {

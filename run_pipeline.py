@@ -27,7 +27,7 @@ def run_step(name, func):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the full NHANES diabetes prediction pipeline")
+    parser = argparse.ArgumentParser(description="Run the full NHANES insulin resistance prediction pipeline")
     parser.add_argument("--skip-download", action="store_true", help="Skip data download step")
     parser.add_argument("--skip-build", action="store_true", help="Skip dataset building step")
     parser.add_argument("--skip-train", action="store_true", help="Skip model training step")

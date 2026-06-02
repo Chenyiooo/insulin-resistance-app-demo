@@ -113,17 +113,19 @@ def fig1():
     excl_kw = dict(boxstyle="round,pad=0.25", facecolor="#FEF3C7", edgecolor="#D97706", linewidth=0.6)
 
     label_map = {
-        "initial": "NHANES 1999\u20132020\nTotal participants",
+        "initial": "NHANES 2017\u20132023\nTotal participants",
         "age_18plus": "Age \u2265 18 years",
         "non_pregnant": "Non-pregnant",
-        "has_hba1c": "HbA1c available",
-        "valid_hba1c": "Valid HbA1c\n(3.0\u201320.0%)",
+        "has_fasting_glucose": "Fasting glucose available",
+        "has_fasting_insulin": "Fasting insulin available",
+        "valid_homa_labs": "Valid HOMA-IR labs",
     }
     reason_map = {
         "age_18plus": "Age < 18",
         "non_pregnant": "Pregnant",
-        "has_hba1c": "Missing HbA1c",
-        "valid_hba1c": "Implausible HbA1c",
+        "has_fasting_glucose": "Missing fasting glucose",
+        "has_fasting_insulin": "Missing fasting insulin",
+        "valid_homa_labs": "Implausible fasting labs",
     }
 
     keys = list(steps.keys())

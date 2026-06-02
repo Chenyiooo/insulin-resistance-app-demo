@@ -1,6 +1,6 @@
 # Beyond the Blood Draw
 
-**Explainable Machine Learning for Non-Invasive Type 2 Diabetes Risk Screening**
+**Explainable Machine Learning for Non-Invasive Insulin Resistance Screening**
 
 This repository contains the full reproducible pipeline for the paper:
 
@@ -8,7 +8,16 @@ This repository contains the full reproducible pipeline for the paper:
 
 ## Overview
 
-We develop and validate machine learning models for diabetes and prediabetes screening using **68 non-invasive features** (self-report, anthropometry, home blood pressure, dietary recall, and dietary supplement intake) from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. No blood draws or laboratory tests are required.
+We develop and validate machine learning models for insulin resistance screening using **68 non-invasive features** (self-report, anthropometry, home blood pressure, dietary recall, and dietary supplement intake) from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. The learning target is lab-defined insulin resistance from HOMA-IR.
+
+The HOMA-IR label is calculated from fasting glucose and insulin:
+
+```text
+HOMA-IR = LBDGLUSI (mmol/L) * LBXIN (mIU/L) / 22.5
+insulin_resistance_binary = 1 if HOMA-IR > 2.5
+```
+
+`LBDGLUSI`, `LBXIN`, and `homa_ir` are used only to define the target and are not included as model inputs.
 
 **Key results:**
 - LightGBM achieves AUC = 0.820 (95% CI: 0.806--0.835), outperforming FINDRISC (0.745) and the ADA Risk Test (0.783)
@@ -93,7 +102,7 @@ All data are publicly available from the [CDC NHANES website](https://wwwn.cdc.g
 | 2017--2020 | Pre-pandemic | ~15,500 |
 | 2021--2023 | Post-pandemic | ~12,000 |
 
-After applying inclusion criteria (age >= 18, non-pregnant, valid HbA1c), the final sample is **14,352 adults**.
+After applying inclusion criteria (age >= 18, non-pregnant, valid fasting glucose and insulin), the analytic sample is restricted to participants with enough fasting laboratory data to calculate HOMA-IR.
 
 ## Models
 
