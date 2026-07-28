@@ -1,46 +1,75 @@
-Significant inputs used right now
-=================================
+Reduced inputs used right now
+=============================
 
-Selection rule: kept model features from the latest LightGBM SHAP ranking with
-mean_abs_shap >= 0.05.
+Selection basis: restored the original 67-feature baseline, then reduced inputs
+using LightGBM group ablations, bootstrap intervals, calibration/FNR, measurement
+reliability, user burden, clinical/temporal validity, and subgroup behavior.
 
-Profile inputs: enter once when creating a profile
---------------------------------------------------
+Recommended active model: low-burden screen with optional blood pressure.
+Current model feature count: 18.
+
+Optional user inputs:
+- systolic_bp: accepted when entered; imputed when omitted
+- diastolic_bp: accepted when entered; imputed when omitted
+- pulse: configured as optional, but absent from the current processed dataset/results
+
+Profile inputs: enter once or update occasionally
+-------------------------------------------------
 
 1. age
-2. race
-3. height
-4. hypertension_history
-5. high_cholesterol
-6. weight_10yr_ago
+2. sex
+3. race
+4. height
+5. family_diabetes
+6. hypertension_history
+7. hypertension_med
+8. high_cholesterol
+9. gestational_diabetes
 
-Daily inputs: enter or update for each check-in
------------------------------------------------
+Check-in inputs: update periodically
+------------------------------------
 
 1. weight
 2. waist_circumference
-3. alcohol_frequency
-4. diet_alcohol_g_avg
-5. diet_caffeine_mg_avg
+3. systolic_bp (optional)
+4. diastolic_bp (optional)
+5. smoking_status
+6. alcohol_frequency
+7. sleep_hours
 
-Derived model features calculated from profile/daily inputs
------------------------------------------------------------
+Derived model features calculated automatically
+-----------------------------------------------
 
 1. bmi = weight / height^2
 2. waist_height_ratio = waist_circumference / height
-3. weight_change_pct = current weight vs weight_10yr_ago
 
-Compact model feature list
---------------------------
+Active model feature list
+-------------------------
 
 1. age
-2. race
-3. bmi
-4. waist_circumference
-5. hypertension_history
-6. high_cholesterol
-7. alcohol_frequency
-8. weight_change_pct
-9. waist_height_ratio
-10. diet_caffeine_mg_avg
-11. diet_alcohol_g_avg
+2. sex
+3. race
+4. bmi
+5. waist_circumference
+6. weight
+7. height
+8. systolic_bp
+9. diastolic_bp
+10. family_diabetes
+11. hypertension_history
+12. hypertension_med
+13. high_cholesterol
+14. smoking_status
+15. alcohol_frequency
+16. sleep_hours
+17. gestational_diabetes
+18. waist_height_ratio
+
+Removed from required flow
+--------------------------
+
+- Supplement and antacid nutrient estimates: high burden, high missingness, poor user reliability.
+- Detailed diet nutrient averages: high logging burden and only modest predictive gain.
+- Ten-year weight change: recall reliability is poor; avoid as required input.
+- Detailed activity, mood, and sleep-trouble modules: better suited as optional context.
+- Alcohol grams and caffeine milligrams: better suited as optional trend records than required screening inputs.

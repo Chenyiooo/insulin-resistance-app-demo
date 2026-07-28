@@ -1,0 +1,33 @@
+{
+  "n_features": 18,
+  "features": [
+    "age",
+    "sex",
+    "race",
+    "bmi",
+    "waist_circumference",
+    "weight",
+    "height",
+    "systolic_bp",
+    "diastolic_bp",
+    "family_diabetes",
+    "hypertension_history",
+    "hypertension_med",
+    "high_cholesterol",
+    "smoking_status",
+    "alcohol_frequency",
+    "sleep_hours",
+    "gestational_diabetes",
+    "waist_height_ratio"
+  ],
+  "auc": 0.8434093603907634,
+  "auprc": 0.8377219263321203,
+  "sensitivity": 0.7830832196452933,
+  "specificity": 0.7382645803698435,
+  "f1": 0.7699530516431925,
+  "fnr": 0.21691678035470668,
+  "brier": 0.16150554124575386,
+  "ece_10bin": 0.029965312638037422,
+  "calibration_slope": 1.127726442408349,
+  "calibration_intercept": 0.0160524698802203
+}

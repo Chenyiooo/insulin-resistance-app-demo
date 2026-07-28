@@ -251,39 +251,32 @@ VAR_HARMONIZE = {
 }
 
 # ── Feature groups for the final model ──
-# Compact significant-input model selected from the latest LightGBM SHAP
-# ranking using mean_abs_shap >= 0.05.
-OPTIONAL_USER_INPUT_FEATURES = []
+# Reduced low-burden screen selected from the restored 67-feature baseline using
+# LightGBM group ablations, calibration/FNR checks, user burden, measurement
+# reliability, and subgroup behavior.
+OPTIONAL_USER_INPUT_FEATURES = ["systolic_bp", "diastolic_bp", "pulse"]
 
 PROFILE_INPUT_FEATURES = [
-    "age",
-    "race",
-    "height",
-    "hypertension_history",
-    "high_cholesterol",
-    "weight_10yr_ago",
+    "age", "sex", "race", "height",
+    "family_diabetes", "hypertension_history",
+    "hypertension_med", "high_cholesterol", "gestational_diabetes",
 ]
 
 DAILY_INPUT_FEATURES = [
-    "weight",
-    "waist_circumference",
-    "alcohol_frequency",
-    "diet_alcohol_g_avg",
-    "diet_caffeine_mg_avg",
+    "weight", "waist_circumference", "systolic_bp", "diastolic_bp",
+    "smoking_status", "alcohol_frequency", "sleep_hours",
 ]
 
 PREDICTOR_FEATURES = [
-    "age",
-    "race",
-    "bmi",
-    "waist_circumference",
-    "hypertension_history",
-    "high_cholesterol",
+    "age", "sex", "race",
+    "bmi", "waist_circumference", "weight", "height",
+    "systolic_bp", "diastolic_bp",
+    "family_diabetes", "hypertension_history", "hypertension_med", "high_cholesterol",
+    "smoking_status",
     "alcohol_frequency",
-    "weight_change_pct",
+    "sleep_hours",
+    "gestational_diabetes",
     "waist_height_ratio",
-    "diet_caffeine_mg_avg",
-    "diet_alcohol_g_avg",
 ]
 
 HOMA_IR_TARGET = "homa_ir"

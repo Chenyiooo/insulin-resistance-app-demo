@@ -110,7 +110,11 @@ def prepare_checkin_features(profile_input, daily_input, preprocessor=None, mode
     user_input = {**profile_input, **daily_input}
 
     missing_profile = [f for f in PROFILE_INPUT_FEATURES if f not in profile_input]
-    missing_daily = [f for f in DAILY_INPUT_FEATURES if f not in daily_input]
+    optional_features = set(OPTIONAL_USER_INPUT_FEATURES)
+    missing_daily = [
+        f for f in DAILY_INPUT_FEATURES
+        if f not in daily_input and f not in optional_features
+    ]
     if missing_profile or missing_daily:
         raise ValueError(
             "Missing profile inputs: "
@@ -122,15 +126,18 @@ def prepare_checkin_features(profile_input, daily_input, preprocessor=None, mode
     waist = pd.to_numeric(
         pd.Series([user_input["waist_circumference"]]), errors="coerce"
     ).iloc[0]
-    weight_10yr_ago = pd.to_numeric(
-        pd.Series([user_input["weight_10yr_ago"]]), errors="coerce"
-    ).iloc[0]
-
     if pd.notna(height) and height > 0 and pd.notna(weight):
         user_input["bmi"] = weight / ((height / 100) ** 2)
 
     if pd.notna(height) and height > 0 and pd.notna(waist):
         user_input["waist_height_ratio"] = waist / height
+
+    if "weight_10yr_ago" in user_input:
+        weight_10yr_ago = pd.to_numeric(
+            pd.Series([user_input["weight_10yr_ago"]]), errors="coerce"
+        ).iloc[0]
+    else:
+        weight_10yr_ago = np.nan
 
     if pd.notna(weight_10yr_ago) and weight_10yr_ago > 20 and pd.notna(weight):
         user_input["weight_change_pct"] = (

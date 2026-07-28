@@ -8,7 +8,7 @@ This repository contains the full reproducible pipeline for the paper:
 
 ## Overview
 
-We develop and validate machine learning models for insulin resistance screening using a compact **11-feature significant-input model** from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. User inputs are split into profile fields entered once and daily check-in fields. The learning target is lab-defined insulin resistance from HOMA-IR.
+We develop and validate machine learning models for insulin resistance screening using a reduced **18-feature low-burden LightGBM model** from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. The reduced input set was selected from the restored 67-feature baseline using predictive value, calibration/FNR, user burden, measurement reliability, clinical validity, and subgroup behavior. The learning target is lab-defined insulin resistance from HOMA-IR.
 
 The HOMA-IR label is calculated from fasting glucose and insulin:
 
@@ -19,10 +19,10 @@ insulin_resistance_binary = 1 if HOMA-IR > 2.5
 
 `LBDGLUSI`, `LBXIN`, and `homa_ir` are used only to define the target and are not included as model inputs.
 
-**Key results:**
-- LightGBM achieves AUC = 0.820 (95% CI: 0.806--0.835), outperforming FINDRISC (0.745) and the ADA Risk Test (0.783)
-- SHAP analysis identifies age, race/ethnicity, waist-to-height ratio, antihypertensive medication use, and family diabetes history as top predictors
-- Consistent performance across age, sex, race/ethnicity, and BMI subgroups (AUC: 0.735--0.832)
+**Current reduced LightGBM result:**
+- Reduced 18-feature LightGBM AUC = 0.8434, AUPRC = 0.8377, FNR = 0.2169
+- Restored 67-feature LightGBM baseline AUC = 0.8514
+- The reduced model removes detailed diet nutrients and supplement nutrient estimates from the required flow
 
 ## Repository Structure
 
@@ -104,26 +104,24 @@ All data are publicly available from the [CDC NHANES website](https://wwwn.cdc.g
 
 After applying inclusion criteria (age >= 18, non-pregnant, valid fasting glucose and insulin), the analytic sample is restricted to participants with enough fasting laboratory data to calculate HOMA-IR.
 
-## Models
+## Reduced LightGBM Model
 
-| Model | AUC | 95% CI |
-|-------|-----|--------|
-| FINDRISC | 0.745 | -- |
-| ADA Risk Test | 0.783 | -- |
-| Logistic Regression | 0.812 | 0.797--0.826 |
-| Random Forest | 0.814 | 0.799--0.829 |
-| SVM (RBF) | 0.809 | 0.794--0.825 |
-| MLP | 0.814 | 0.799--0.829 |
-| XGBoost | 0.816 | 0.800--0.831 |
-| **LightGBM** | **0.820** | **0.806--0.835** |
+The active model is trained with LightGBM only. Other model families are not part of the reduced production workflow.
 
-## Significant Input Set (11 model features)
+| Model | Features | AUC | AUPRC | Sensitivity | Specificity | FNR | Brier |
+|-------|---------:|----:|------:|------------:|------------:|----:|------:|
+| Restored baseline LightGBM | 67 | 0.8514 | 0.8453 | 0.7940 | 0.7468 | 0.2060 | 0.1578 |
+| Reduced LightGBM | 18 | 0.8434 | 0.8377 | 0.7831 | 0.7383 | 0.2169 | 0.1615 |
 
-The compact model keeps features with mean absolute SHAP importance >= 0.05 from the latest LightGBM retrain. The user-facing flow is split into profile inputs and daily check-in inputs; derived model fields are calculated automatically.
+## Reduced Input Set (18 model features)
 
-- **Profile inputs (6):** age, race/ethnicity, height, hypertension history, high cholesterol history, weight 10 years ago
-- **Daily inputs (5):** weight, waist circumference, alcohol frequency, average alcohol intake, average caffeine intake
-- **Derived model features (3):** BMI, waist-to-height ratio, 10-year weight change %
+The user-facing flow is split into profile inputs and check-in inputs. BMI and waist-to-height ratio are calculated automatically.
+
+- **Profile inputs (9):** age, sex, race/ethnicity, height, family diabetes history, hypertension history, hypertension medication use, high cholesterol history, gestational diabetes history
+- **Check-in inputs (7):** weight, waist circumference, systolic BP optional, diastolic BP optional, smoking status, alcohol frequency, sleep hours
+- **Derived model features (2):** BMI, waist-to-height ratio
+
+Detailed diet nutrient averages, supplement nutrient estimates, ten-year weight change, caffeine milligrams, alcohol grams, detailed physical activity, PHQ-9, and sleep-trouble modules are removed from the required flow.
 
 ## License
 

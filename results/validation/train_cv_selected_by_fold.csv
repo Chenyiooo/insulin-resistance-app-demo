@@ -1,0 +1,6 @@
+fold,features
+1,"['waist_height_ratio', 'waist_circumference', 'bmi', 'age', 'race', 'diet_caffeine_mg_avg', 'diet_alcohol_g_avg', 'weight_change_pct', 'diastolic_bp', 'weight', 'hypertension_history']"
+2,"['waist_height_ratio', 'waist_circumference', 'bmi', 'age', 'diet_alcohol_g_avg', 'race', 'diet_caffeine_mg_avg', 'diastolic_bp', 'weight_change_pct', 'hypertension_history', 'weight']"
+3,"['waist_circumference', 'waist_height_ratio', 'bmi', 'age', 'diet_alcohol_g_avg', 'race', 'weight_change_pct', 'diet_caffeine_mg_avg', 'alcohol_frequency', 'systolic_bp', 'weight']"
+4,"['waist_circumference', 'waist_height_ratio', 'bmi', 'age', 'race', 'diet_alcohol_g_avg', 'weight_change_pct', 'diet_caffeine_mg_avg', 'hypertension_history', 'diastolic_bp', 'income_ratio']"
+5,"['waist_height_ratio', 'waist_circumference', 'bmi', 'diet_alcohol_g_avg', 'age', 'race', 'weight_change_pct', 'diet_caffeine_mg_avg', 'weight', 'hypertension_history', 'diastolic_bp']"

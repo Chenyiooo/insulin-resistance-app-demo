@@ -1,0 +1,9 @@
+group,recommendation,reason
+supplements,delete,"High burden, high missingness, low real-world reliability for users to estimate nutrient mg from supplements."
+detailed diet nutrients,delete by default,Requires diet logging and nutrient estimation; NHANES only gives 1-2 recalls.
+blood pressure,optional,Useful and clinically coherent but requires equipment; impute if omitted.
+race,keep with fairness monitoring,Predictive and affects subgroup error tradeoffs; ethically sensitive.
+ten-year weight change,optional / avoid required,Clinically plausible but recall reliability is poor and missingness is high.
+activity/sleep/mood,optional module,Some clinical value but more repeated questionnaire burden.
+alcohol,keep simple frequency only,Frequency captures most alcohol signal; detailed grams are burdensome.
+caffeine,optional trend feature,Milligram estimates are unreliable for users and only modestly predictive.

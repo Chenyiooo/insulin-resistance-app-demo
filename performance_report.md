@@ -2,6 +2,12 @@
 
 Retrain completed after reducing the model to significant inputs only and splitting user entry into profile fields and daily check-in fields.
 
+For the focused LightGBM-only validation requested after this retrain, including
+original-vs-compact comparison, ablations, subgroup calibration, robustness, and
+leakage checks, see:
+
+`results/validation/lightgbm_compact_validation_report.md`
+
 ## Input Design
 
 Selection rule: kept compact model features from the latest full LightGBM SHAP ranking with `mean_abs_shap >= 0.05`.
