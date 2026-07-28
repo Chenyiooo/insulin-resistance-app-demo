@@ -51,8 +51,13 @@ def load_data():
     train = pd.read_parquet(os.path.join(DATA_PROCESSED_DIR, "train.parquet"))
     test = pd.read_parquet(os.path.join(DATA_PROCESSED_DIR, "test.parquet"))
 
-    with open(os.path.join(DATA_PROCESSED_DIR, "features_used.txt")) as f:
-        features = [line.strip() for line in f if line.strip()]
+    feature_path = os.path.join(DATA_PROCESSED_DIR, "features_used.txt")
+    if os.path.exists(feature_path):
+        with open(feature_path) as f:
+            saved_features = [line.strip() for line in f if line.strip()]
+        features = [f for f in saved_features if f in PREDICTOR_FEATURES]
+    else:
+        features = PREDICTOR_FEATURES.copy()
 
     return train, test, features
 

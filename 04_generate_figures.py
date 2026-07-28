@@ -220,7 +220,7 @@ def fig4_calibration_curves(save_path=None):
     with open(os.path.join(DATA_PROCESSED_DIR, "features_used.txt")) as f:
         features = [l.strip() for l in f if l.strip()]
 
-    features = [f for f in features if f in test.columns]
+    features = [f for f in features if f in PREDICTOR_FEATURES and f in test.columns]
     y_test = test[BINARY_TARGET].values
 
     fig, ax = plt.subplots(figsize=(8, 7))
@@ -279,7 +279,7 @@ def fig5_dca(save_path=None):
     with open(os.path.join(DATA_PROCESSED_DIR, "features_used.txt")) as f:
         features = [l.strip() for l in f if l.strip()]
 
-    features = [f for f in features if f in test.columns]
+    features = [f for f in features if f in PREDICTOR_FEATURES and f in test.columns]
     y_test = test[BINARY_TARGET].values
     prevalence = y_test.mean()
 

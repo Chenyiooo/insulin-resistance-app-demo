@@ -2,5 +2,6 @@ step,n
 initial,27493
 age_18plus,17846
 non_pregnant,17718
-has_hba1c,14353
-valid_hba1c,14352
+has_fasting_glucose,7441
+has_fasting_insulin,7177
+valid_homa_labs,7177

@@ -8,7 +8,7 @@ This repository contains the full reproducible pipeline for the paper:
 
 ## Overview
 
-We develop and validate machine learning models for insulin resistance screening using **68 non-invasive features** (self-report, anthropometry, home blood pressure, dietary recall, and dietary supplement intake) from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. The learning target is lab-defined insulin resistance from HOMA-IR.
+We develop and validate machine learning models for insulin resistance screening using **68 non-invasive features** (self-report, anthropometry, optional home blood pressure, dietary recall, and dietary supplement intake) from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. Direct blood pressure measurements can be entered when available, or skipped and imputed when users do not have them. The learning target is lab-defined insulin resistance from HOMA-IR.
 
 The HOMA-IR label is calculated from fasting glucose and insulin:
 
@@ -35,7 +35,7 @@ insulin_resistance_binary = 1 if HOMA-IR > 2.5
 ├── 05_regen_figures.py        # Regenerate publication-quality figures
 ├── run_pipeline.py            # Run the full pipeline end-to-end
 ├── requirements.txt           # Python dependencies
-├── features.md                # Documentation of model features
+├── features_used.txt          # Current default model feature list
 ├── data/
 │   ├── raw/                   # Downloaded NHANES XPT files (not tracked)
 │   └── processed/             # Processed parquet files + metadata
@@ -119,11 +119,11 @@ After applying inclusion criteria (age >= 18, non-pregnant, valid fasting glucos
 
 ## Non-Invasive Feature Set (68 configured features)
 
-Core profile, measurement, and lifestyle features can be collected quickly without medical supervision. Dietary recall features come from NHANES Day 1 and Day 2 24-hour recalls; supplement features summarize mean daily intake over the prior 30 days.
+Core profile, measurement, and lifestyle features can be collected quickly without medical supervision. Direct blood pressure measurements (`systolic_bp`, `diastolic_bp`, `pulse`) are optional user inputs: the model can use them when entered, and prediction preprocessing imputes them when omitted. Dietary recall features come from NHANES Day 1 and Day 2 24-hour recalls; supplement features summarize mean daily intake over the prior 30 days.
 
 - **Demographics (5):** age, sex, race/ethnicity, education, income-to-poverty ratio
 - **Anthropometry (4):** BMI, waist circumference, weight, height
-- **Hemodynamics (3):** systolic BP, diastolic BP, pulse
+- **Hemodynamics (3, optional for user entry):** systolic BP, diastolic BP, pulse
 - **Medical/family history (4):** family diabetes, hypertension, antihypertensive medication, high cholesterol
 - **Lifestyle (10):** smoking, alcohol (frequency + quantity), physical activity (4 types), sedentary time, sleep duration, sleep disturbance
 - **Derived/profile (4):** waist-to-height ratio, 10-year weight change %, PHQ-9 depression score, gestational diabetes history

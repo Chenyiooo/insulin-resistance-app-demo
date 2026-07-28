@@ -23,7 +23,7 @@ from sklearn.metrics import roc_auc_score
 
 from config import (
     DATA_PROCESSED_DIR, RESULTS_DIR, MODELS_DIR,
-    BINARY_TARGET, SUBGROUPS, RANDOM_STATE, DIETARY_NUTRIENTS,
+    PREDICTOR_FEATURES, BINARY_TARGET, SUBGROUPS, RANDOM_STATE, DIETARY_NUTRIENTS,
 )
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "paper", "figures")
@@ -211,7 +211,7 @@ def fig4():
     test = pd.read_parquet(os.path.join(DATA_PROCESSED_DIR, "test.parquet"))
     with open(os.path.join(DATA_PROCESSED_DIR, "features_used.txt")) as f:
         features = [l.strip() for l in f if l.strip()]
-    features = [f for f in features if f in test.columns]
+    features = [f for f in features if f in PREDICTOR_FEATURES and f in test.columns]
     y_test = test[BINARY_TARGET].values
 
     fig, ax = plt.subplots(figsize=(3.8, 3.5))
@@ -252,7 +252,7 @@ def fig5():
     test = pd.read_parquet(os.path.join(DATA_PROCESSED_DIR, "test.parquet"))
     with open(os.path.join(DATA_PROCESSED_DIR, "features_used.txt")) as f:
         features = [l.strip() for l in f if l.strip()]
-    features = [f for f in features if f in test.columns]
+    features = [f for f in features if f in PREDICTOR_FEATURES and f in test.columns]
     y = test[BINARY_TARGET].values
     prev = y.mean()
     thresholds = np.arange(0.01, 0.80, 0.01)
@@ -402,7 +402,7 @@ def fig_cal_dca_combined():
     test = pd.read_parquet(os.path.join(DATA_PROCESSED_DIR, "test.parquet"))
     with open(os.path.join(DATA_PROCESSED_DIR, "features_used.txt")) as f:
         features = [l.strip() for l in f if l.strip()]
-    features = [f for f in features if f in test.columns]
+    features = [f for f in features if f in PREDICTOR_FEATURES and f in test.columns]
     y = test[BINARY_TARGET].values
     prev = y.mean()
 

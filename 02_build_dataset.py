@@ -13,12 +13,14 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyreadstat
+import joblib
 from sklearn.experimental import enable_iterative_imputer  # noqa
 from sklearn.impute import IterativeImputer
 from config import (
-    CYCLES, COMPONENT_BASES, DATA_RAW_DIR, DATA_PROCESSED_DIR,
+    CYCLES, COMPONENT_BASES, DATA_RAW_DIR, DATA_PROCESSED_DIR, MODELS_DIR,
     get_file_url, get_alternative_urls, VAR_HARMONIZE,
     PREDICTOR_FEATURES, BINARY_TARGET, MULTICLASS_TARGET,
+    OPTIONAL_USER_INPUT_FEATURES,
     FILE_NAME_OVERRIDES, RANDOM_STATE, DIETARY_NUTRIENTS,
     HOMA_IR_TARGET, HOMA_IR_THRESHOLD,
 )
@@ -331,19 +333,24 @@ def clean_features(df):
 
 def impute_missing(df, features):
     """Impute missing values using iterative imputer (MICE-like) for numeric,
-    mode for categorical. Fit on train split, transform both."""
-    from sklearn.model_selection import train_test_split
+    mode for categorical. Fit on train split, transform both.
 
+    Returns the imputed DataFrame and the fitted preprocessing artifact used for
+    prediction-time input preparation.
+    """
     numeric_feats = df[features].select_dtypes(include=[np.number]).columns.tolist()
     cat_feats = [f for f in features if f not in numeric_feats and f in df.columns]
+    categorical_fill_values = {}
 
     for col in cat_feats:
         if col in df.columns and df[col].isna().any():
             mode_val = df[col].mode()
             if len(mode_val) > 0:
-                df[col] = df[col].fillna(mode_val.iloc[0])
+                categorical_fill_values[col] = mode_val.iloc[0]
+                df[col] = df[col].fillna(categorical_fill_values[col])
 
     existing_numeric = [f for f in numeric_feats if f in df.columns]
+    imputer = None
     if existing_numeric:
         train_mask = df["split"] == "train"
         imputer = IterativeImputer(
@@ -356,7 +363,28 @@ def impute_missing(df, features):
             df.loc[~train_mask, existing_numeric]
         )
 
-    return df
+    numeric_fill_values = {}
+    if imputer is not None and hasattr(imputer, "initial_imputer_"):
+        numeric_fill_values = {
+            feature: fill_value
+            for feature, fill_value in zip(
+                existing_numeric, imputer.initial_imputer_.statistics_
+            )
+        }
+
+    preprocessor = {
+        "features": list(features),
+        "numeric_features": existing_numeric,
+        "numeric_fill_values": numeric_fill_values,
+        "categorical_features": cat_feats,
+        "categorical_fill_values": categorical_fill_values,
+        "imputer": imputer,
+        "optional_features": [
+            f for f in OPTIONAL_USER_INPUT_FEATURES if f in features
+        ],
+    }
+
+    return df, preprocessor
 
 
 # ── Main pipeline ──
@@ -400,6 +428,12 @@ def build_dataset():
 
     # 5. Report missing rates
     features_available = [f for f in PREDICTOR_FEATURES if f in combined.columns]
+    optional_user_inputs = [f for f in OPTIONAL_USER_INPUT_FEATURES if f in features_available]
+    if optional_user_inputs:
+        print("\n  Optional user inputs accepted when available and imputed when omitted:")
+        for feat in optional_user_inputs:
+            print(f"    {feat}")
+
     missing_pct = combined[features_available].isna().mean() * 100
     print(f"\n  Missing rates (top 10):")
     for col, pct in missing_pct.sort_values(ascending=False).head(10).items():
@@ -421,7 +455,7 @@ def build_dataset():
 
     # 7. Impute missing values (fit on train, transform both)
     print(f"  Imputing missing values (MICE)...")
-    combined = impute_missing(combined, features_available)
+    combined, preprocessor = impute_missing(combined, features_available)
 
     # 8. Save
     train = combined[combined["split"] == "train"].copy()
@@ -457,6 +491,9 @@ def build_dataset():
     with open(os.path.join(DATA_PROCESSED_DIR, "features_used.txt"), "w") as f:
         for feat in features_available:
             f.write(feat + "\n")
+
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    joblib.dump(preprocessor, os.path.join(MODELS_DIR, "preprocessor.joblib"))
 
     print(f"\n  Datasets saved to {DATA_PROCESSED_DIR}")
     return combined, flow

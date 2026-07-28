@@ -251,6 +251,10 @@ VAR_HARMONIZE = {
 }
 
 # ── Feature groups for the final model ──
+# Direct blood pressure measurements can improve predictions when users have
+# them, but user-facing prediction helpers may impute them when omitted.
+OPTIONAL_USER_INPUT_FEATURES = ["systolic_bp", "diastolic_bp", "pulse"]
+
 PREDICTOR_FEATURES = [
     "age", "sex", "race", "education", "income_ratio",
     "bmi", "waist_circumference", "weight", "height",
