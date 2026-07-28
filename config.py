@@ -251,62 +251,39 @@ VAR_HARMONIZE = {
 }
 
 # ── Feature groups for the final model ──
-# Direct blood pressure measurements can improve predictions when users have
-# them, but user-facing prediction helpers may impute them when omitted.
-OPTIONAL_USER_INPUT_FEATURES = ["systolic_bp", "diastolic_bp", "pulse"]
+# Compact significant-input model selected from the latest LightGBM SHAP
+# ranking using mean_abs_shap >= 0.05.
+OPTIONAL_USER_INPUT_FEATURES = []
+
+PROFILE_INPUT_FEATURES = [
+    "age",
+    "race",
+    "height",
+    "hypertension_history",
+    "high_cholesterol",
+    "weight_10yr_ago",
+]
+
+DAILY_INPUT_FEATURES = [
+    "weight",
+    "waist_circumference",
+    "alcohol_frequency",
+    "diet_alcohol_g_avg",
+    "diet_caffeine_mg_avg",
+]
 
 PREDICTOR_FEATURES = [
-    "age", "sex", "race", "education", "income_ratio",
-    "bmi", "waist_circumference", "weight", "height",
-    "systolic_bp", "diastolic_bp", "pulse",
-    "family_diabetes", "hypertension_history", "hypertension_med", "high_cholesterol",
-    "smoking_status",
-    "alcohol_frequency", "alcohol_avg_drinks",
-    "vigorous_work", "moderate_work", "vigorous_recreation", "moderate_recreation",
-    "sedentary_minutes",
-    "sleep_hours", "sleep_trouble",
-    "phq9_score",
-    "gestational_diabetes",
+    "age",
+    "race",
+    "bmi",
+    "waist_circumference",
+    "hypertension_history",
+    "high_cholesterol",
+    "alcohol_frequency",
     "weight_change_pct",
     "waist_height_ratio",
-    "diet_recall_days",
-    "diet_energy_kcal_avg",
-    "diet_protein_g_avg",
-    "diet_carb_g_avg",
-    "diet_sugar_g_avg",
-    "diet_fiber_g_avg",
-    "diet_total_fat_g_avg",
-    "diet_sat_fat_g_avg",
-    "diet_mono_fat_g_avg",
-    "diet_poly_fat_g_avg",
-    "diet_cholesterol_mg_avg",
-    "diet_sodium_mg_avg",
-    "diet_potassium_mg_avg",
-    "diet_calcium_mg_avg",
-    "diet_magnesium_mg_avg",
-    "diet_vitamin_d_mcg_avg",
     "diet_caffeine_mg_avg",
     "diet_alcohol_g_avg",
-    "supplement_used",
-    "supplement_count",
-    "antacid_used",
-    "antacid_count",
-    "supp_energy_kcal",
-    "supp_protein_g",
-    "supp_carb_g",
-    "supp_sugar_g",
-    "supp_fiber_g",
-    "supp_total_fat_g",
-    "supp_sat_fat_g",
-    "supp_mono_fat_g",
-    "supp_poly_fat_g",
-    "supp_cholesterol_mg",
-    "supp_sodium_mg",
-    "supp_potassium_mg",
-    "supp_calcium_mg",
-    "supp_magnesium_mg",
-    "supp_vitamin_d_mcg",
-    "supp_caffeine_mg",
 ]
 
 HOMA_IR_TARGET = "homa_ir"

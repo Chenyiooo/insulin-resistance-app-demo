@@ -8,7 +8,7 @@ This repository contains the full reproducible pipeline for the paper:
 
 ## Overview
 
-We develop and validate machine learning models for insulin resistance screening using **68 non-invasive features** (self-report, anthropometry, optional home blood pressure, dietary recall, and dietary supplement intake) from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. Direct blood pressure measurements can be entered when available, or skipped and imputed when users do not have them. The learning target is lab-defined insulin resistance from HOMA-IR.
+We develop and validate machine learning models for insulin resistance screening using a compact **11-feature significant-input model** from the National Health and Nutrition Examination Survey (NHANES) 2017--2023. User inputs are split into profile fields entered once and daily check-in fields. The learning target is lab-defined insulin resistance from HOMA-IR.
 
 The HOMA-IR label is calculated from fasting glucose and insulin:
 
@@ -117,18 +117,13 @@ After applying inclusion criteria (age >= 18, non-pregnant, valid fasting glucos
 | XGBoost | 0.816 | 0.800--0.831 |
 | **LightGBM** | **0.820** | **0.806--0.835** |
 
-## Non-Invasive Feature Set (68 configured features)
+## Significant Input Set (11 model features)
 
-Core profile, measurement, and lifestyle features can be collected quickly without medical supervision. Direct blood pressure measurements (`systolic_bp`, `diastolic_bp`, `pulse`) are optional user inputs: the model can use them when entered, and prediction preprocessing imputes them when omitted. Dietary recall features come from NHANES Day 1 and Day 2 24-hour recalls; supplement features summarize mean daily intake over the prior 30 days.
+The compact model keeps features with mean absolute SHAP importance >= 0.05 from the latest LightGBM retrain. The user-facing flow is split into profile inputs and daily check-in inputs; derived model fields are calculated automatically.
 
-- **Demographics (5):** age, sex, race/ethnicity, education, income-to-poverty ratio
-- **Anthropometry (4):** BMI, waist circumference, weight, height
-- **Hemodynamics (3, optional for user entry):** systolic BP, diastolic BP, pulse
-- **Medical/family history (4):** family diabetes, hypertension, antihypertensive medication, high cholesterol
-- **Lifestyle (10):** smoking, alcohol (frequency + quantity), physical activity (4 types), sedentary time, sleep duration, sleep disturbance
-- **Derived/profile (4):** waist-to-height ratio, 10-year weight change %, PHQ-9 depression score, gestational diabetes history
-- **Dietary recall (18):** number of recall days plus two-day average intake of energy, protein, carbohydrate, sugars, fiber, fats, cholesterol, sodium, potassium, calcium, magnesium, vitamin D, caffeine, and alcohol
-- **Dietary supplements/antacids (20):** use indicators, counts, and mean daily supplemental intake of selected nutrients
+- **Profile inputs (6):** age, race/ethnicity, height, hypertension history, high cholesterol history, weight 10 years ago
+- **Daily inputs (5):** weight, waist circumference, alcohol frequency, average alcohol intake, average caffeine intake
+- **Derived model features (3):** BMI, waist-to-height ratio, 10-year weight change %
 
 ## License
 

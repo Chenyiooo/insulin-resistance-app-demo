@@ -1,84 +1,109 @@
 # Performance Report
 
-Retrain completed after enabling optional user blood pressure inputs.
+Retrain completed after reducing the model to significant inputs only and splitting user entry into profile fields and daily check-in fields.
 
-## Dataset And Feature Setup
+## Input Design
+
+Selection rule: kept compact model features from the latest full LightGBM SHAP ranking with `mean_abs_shap >= 0.05`.
+
+Profile inputs, entered once when creating a profile:
+
+1. `age`
+2. `race`
+3. `height`
+4. `hypertension_history`
+5. `high_cholesterol`
+6. `weight_10yr_ago`
+
+Daily inputs, entered or updated at each check-in:
+
+1. `weight`
+2. `waist_circumference`
+3. `alcohol_frequency`
+4. `diet_alcohol_g_avg`
+5. `diet_caffeine_mg_avg`
+
+Derived model features calculated automatically:
+
+1. `bmi`
+2. `waist_height_ratio`
+3. `weight_change_pct`
+
+Final compact model features:
+
+`age`, `race`, `bmi`, `waist_circumference`, `hypertension_history`, `high_cholesterol`, `alcohol_frequency`, `weight_change_pct`, `waist_height_ratio`, `diet_caffeine_mg_avg`, `diet_alcohol_g_avg`
+
+## Dataset
 
 - Data source: NHANES 2017-2020 and 2021-2023 local raw files.
 - Analytic sample: 7,177 adults with valid fasting glucose and insulin for HOMA-IR.
 - Train/test split: 5,741 train and 1,436 test, stratified 80:20 with `random_state=42`.
 - Target: `insulin_resistance_binary`, positive when HOMA-IR > 2.5.
 - Test prevalence: 51.0%.
-- Model feature count used in this retrain: 67.
-- Optional user-entered BP fields available in current data: `systolic_bp`, `diastolic_bp`.
-- `pulse` remains configured as optional, but is absent from the current processed dataset/results.
-
-The retrained preprocessing artifact is saved at `results/models/preprocessor.joblib`.
-Optional BP inputs are accepted when entered and imputed when omitted.
+- Model feature count: 11.
 
 ## Model Performance
 
 | Model | AUC | 95% CI | AUPRC | Sensitivity | Specificity | F1 | Brier |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| FINDRISC | 0.7490 | n/a | 0.7090 | 0.5171 | 0.8179 | 0.6113 | 0.2069 |
-| ADA Risk Test | 0.7154 | n/a | 0.6880 | 0.6739 | 0.6031 | 0.6560 | 0.2160 |
-| Logistic Regression | 0.8460 | 0.8260-0.8653 | 0.8460 | 0.7681 | 0.7454 | 0.7634 | 0.1608 |
-| Random Forest | 0.8458 | 0.8249-0.8652 | 0.8415 | 0.7790 | 0.7340 | 0.7659 | 0.1624 |
-| XGBoost | 0.8513 | 0.8307-0.8708 | 0.8489 | 0.7913 | 0.7454 | 0.7775 | 0.1566 |
-| LightGBM | 0.8514 | 0.8303-0.8696 | 0.8453 | 0.7940 | 0.7468 | 0.7796 | 0.1578 |
-| SVM | 0.8446 | 0.8219-0.8642 | 0.8337 | 0.7831 | 0.7624 | 0.7788 | 0.1614 |
-| MLP | 0.8420 | 0.8213-0.8620 | 0.8408 | 0.6944 | 0.7994 | 0.7361 | 0.1641 |
+| FINDRISC | 0.7485 | n/a | 0.7094 | 0.5143 | 0.8179 | 0.6090 | 0.2070 |
+| ADA Risk Test | 0.7153 | n/a | 0.6881 | 0.6739 | 0.6060 | 0.6569 | 0.2160 |
+| Logistic Regression | 0.8445 | 0.8232-0.8640 | 0.8448 | 0.7517 | 0.7710 | 0.7626 | 0.1616 |
+| Random Forest | 0.8401 | 0.8190-0.8598 | 0.8304 | 0.7804 | 0.7525 | 0.7735 | 0.1630 |
+| XGBoost | 0.8393 | 0.8184-0.8596 | 0.8324 | 0.9618 | 0.3869 | 0.7544 | 0.2072 |
+| LightGBM | 0.8475 | 0.8269-0.8670 | 0.8407 | 0.7858 | 0.7568 | 0.7784 | 0.1595 |
+| SVM | 0.8410 | 0.8189-0.8613 | 0.8206 | 0.7954 | 0.7240 | 0.7722 | 0.1616 |
+| MLP | 0.8394 | 0.8171-0.8594 | 0.8385 | 0.7613 | 0.7781 | 0.7713 | 0.1637 |
 
 ## Best Model
 
 LightGBM was selected as the best model by test AUC:
 
-- AUC: 0.8514
-- 95% bootstrap CI: 0.8303-0.8696
-- AUPRC: 0.8453
-- Sensitivity: 0.7940
-- Specificity: 0.7468
-- F1: 0.7796
-- Brier score: 0.1578
+- AUC: 0.8475
+- 95% bootstrap CI: 0.8269-0.8670
+- AUPRC: 0.8407
+- Sensitivity: 0.7858
+- Specificity: 0.7568
+- F1: 0.7784
+- Brier score: 0.1595
 
-XGBoost was effectively tied on discrimination with AUC 0.8513 and the highest AUPRC at 0.8489.
+Compared with the previous 67-feature retrain, the compact model reduced the model feature count from 67 to 11 while decreasing best-model AUC from 0.8514 to 0.8475.
 
-## Top SHAP Features
-
-Top LightGBM features by mean absolute SHAP value:
+## Top SHAP Features After Compact Retrain
 
 | Rank | Feature | Mean Abs SHAP |
 |---:|---|---:|
-| 1 | `bmi` | 0.5317 |
-| 2 | `waist_height_ratio` | 0.3609 |
-| 3 | `waist_circumference` | 0.3109 |
-| 4 | `hypertension_history` | 0.1014 |
-| 5 | `race` | 0.0978 |
-| 6 | `diet_alcohol_g_avg` | 0.0959 |
-| 7 | `age` | 0.0823 |
-| 8 | `high_cholesterol` | 0.0744 |
-| 9 | `diet_caffeine_mg_avg` | 0.0663 |
-| 10 | `weight_change_pct` | 0.0544 |
+| 1 | `waist_circumference` | 0.5842 |
+| 2 | `waist_height_ratio` | 0.3918 |
+| 3 | `bmi` | 0.3000 |
+| 4 | `race` | 0.1364 |
+| 5 | `hypertension_history` | 0.1346 |
+| 6 | `age` | 0.1199 |
+| 7 | `diet_alcohol_g_avg` | 0.1162 |
+| 8 | `weight_change_pct` | 0.0917 |
+| 9 | `high_cholesterol` | 0.0842 |
+| 10 | `diet_caffeine_mg_avg` | 0.0827 |
+| 11 | `alcohol_frequency` | 0.0543 |
 
 ## Subgroup AUC
 
 | Group | Subgroup | N | Prevalence | AUC | 95% CI |
 |---|---|---:|---:|---:|---:|
-| Age | 18-39 | 428 | 0.446 | 0.8713 | 0.8372-0.9066 |
-| Age | 40-59 | 441 | 0.522 | 0.8675 | 0.8326-0.8960 |
-| Age | 60+ | 567 | 0.550 | 0.8129 | 0.7805-0.8461 |
-| Sex | Male | 670 | 0.524 | 0.8549 | 0.8258-0.8848 |
-| Sex | Female | 766 | 0.499 | 0.8490 | 0.8210-0.8728 |
-| Race | NH White | 655 | 0.464 | 0.8684 | 0.8426-0.8946 |
-| Race | NH Black | 273 | 0.531 | 0.8757 | 0.8296-0.9149 |
-| Race | Hispanic | 301 | 0.608 | 0.8167 | 0.7667-0.8659 |
-| Race | Other | 207 | 0.488 | 0.8028 | 0.7461-0.8612 |
-| BMI | Normal (<25) | 392 | 0.138 | 0.7359 | 0.6582-0.8001 |
-| BMI | Overweight (25-30) | 438 | 0.463 | 0.6992 | 0.6523-0.7454 |
-| BMI | Obese (>=30) | 606 | 0.785 | 0.7562 | 0.7002-0.8009 |
+| Age | 18-39 | 428 | 0.446 | 0.8673 | 0.8329-0.9020 |
+| Age | 40-59 | 441 | 0.522 | 0.8673 | 0.8330-0.8972 |
+| Age | 60+ | 567 | 0.550 | 0.8063 | 0.7714-0.8395 |
+| Sex | Male | 670 | 0.524 | 0.8484 | 0.8185-0.8764 |
+| Sex | Female | 766 | 0.499 | 0.8485 | 0.8213-0.8732 |
+| Race | NH White | 655 | 0.464 | 0.8620 | 0.8345-0.8874 |
+| Race | NH Black | 273 | 0.531 | 0.8700 | 0.8268-0.9114 |
+| Race | Hispanic | 301 | 0.608 | 0.8189 | 0.7716-0.8703 |
+| Race | Other | 207 | 0.488 | 0.7917 | 0.7355-0.8484 |
+| BMI | Normal (<25) | 392 | 0.138 | 0.6929 | 0.5999-0.7589 |
+| BMI | Overweight (25-30) | 443 | 0.465 | 0.6930 | 0.6424-0.7413 |
+| BMI | Obese (>=30) | 601 | 0.787 | 0.7501 | 0.7022-0.7969 |
 
 ## Notes
 
-- The strongest ML models substantially outperformed FINDRISC and the ADA Risk Test on AUC.
-- Performance was strongest in younger and middle-aged groups and weaker within BMI strata, especially overweight participants.
-- Direct BP measurements are not mandatory for user prediction. When omitted, preprocessing fills optional BP inputs using the fitted training preprocessor before model prediction.
+- The compact significant-input model preserves nearly all discrimination from the larger model.
+- LightGBM remains the best overall model, but Logistic Regression is close and may be attractive if calibration, simplicity, or deployment transparency become the priority.
+- The new helper `prepare_checkin_features(profile_input, daily_input, ...)` converts the two user input groups into the 11 model features and was smoke-tested against the retrained LightGBM model.

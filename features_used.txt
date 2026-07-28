@@ -1,79 +1,46 @@
-Features used right now
-=======================
+Significant inputs used right now
+=================================
 
-Source checked: data/processed/missing_rates.csv and results/tables/shap_importance.csv.
-Current trained/evaluated feature count: 67.
+Selection rule: kept model features from the latest LightGBM SHAP ranking with
+mean_abs_shap >= 0.05.
 
-Optional user inputs:
-- systolic_bp: accepted when entered; imputed when omitted
-- diastolic_bp: accepted when entered; imputed when omitted
-- pulse: configured as optional, but absent from the current processed dataset/results
+Profile inputs: enter once when creating a profile
+--------------------------------------------------
 
-Current feature list:
 1. age
-2. sex
-3. race
-4. education
-5. income_ratio
-6. bmi
-7. waist_circumference
-8. weight
-9. height
-10. systolic_bp
-11. diastolic_bp
-12. family_diabetes
-13. hypertension_history
-14. hypertension_med
-15. high_cholesterol
-16. smoking_status
-17. alcohol_frequency
-18. alcohol_avg_drinks
-19. vigorous_work
-20. moderate_work
-21. vigorous_recreation
-22. moderate_recreation
-23. sedentary_minutes
-24. sleep_hours
-25. sleep_trouble
-26. phq9_score
-27. gestational_diabetes
-28. weight_change_pct
-29. waist_height_ratio
-30. diet_recall_days
-31. diet_energy_kcal_avg
-32. diet_protein_g_avg
-33. diet_carb_g_avg
-34. diet_sugar_g_avg
-35. diet_fiber_g_avg
-36. diet_total_fat_g_avg
-37. diet_sat_fat_g_avg
-38. diet_mono_fat_g_avg
-39. diet_poly_fat_g_avg
-40. diet_cholesterol_mg_avg
-41. diet_sodium_mg_avg
-42. diet_potassium_mg_avg
-43. diet_calcium_mg_avg
-44. diet_magnesium_mg_avg
-45. diet_vitamin_d_mcg_avg
-46. diet_caffeine_mg_avg
-47. diet_alcohol_g_avg
-48. supplement_used
-49. supplement_count
-50. antacid_used
-51. antacid_count
-52. supp_energy_kcal
-53. supp_protein_g
-54. supp_carb_g
-55. supp_sugar_g
-56. supp_fiber_g
-57. supp_total_fat_g
-58. supp_sat_fat_g
-59. supp_mono_fat_g
-60. supp_poly_fat_g
-61. supp_cholesterol_mg
-62. supp_sodium_mg
-63. supp_potassium_mg
-64. supp_calcium_mg
-65. supp_magnesium_mg
-66. supp_vitamin_d_mcg
-67. supp_caffeine_mg
+2. race
+3. height
+4. hypertension_history
+5. high_cholesterol
+6. weight_10yr_ago
+
+Daily inputs: enter or update for each check-in
+-----------------------------------------------
+
+1. weight
+2. waist_circumference
+3. alcohol_frequency
+4. diet_alcohol_g_avg
+5. diet_caffeine_mg_avg
+
+Derived model features calculated from profile/daily inputs
+-----------------------------------------------------------
+
+1. bmi = weight / height^2
+2. waist_height_ratio = waist_circumference / height
+3. weight_change_pct = current weight vs weight_10yr_ago
+
+Compact model feature list
+--------------------------
+
+1. age
+2. race
+3. bmi
+4. waist_circumference
+5. hypertension_history
+6. high_cholesterol
+7. alcohol_frequency
+8. weight_change_pct
+9. waist_height_ratio
+10. diet_caffeine_mg_avg
+11. diet_alcohol_g_avg
