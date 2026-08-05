@@ -123,6 +123,33 @@ The user-facing flow is split into profile inputs and check-in inputs. BMI and w
 
 Detailed diet nutrient averages, supplement nutrient estimates, ten-year weight change, caffeine milligrams, alcohol grams, detailed physical activity, PHQ-9, and sleep-trouble modules are removed from the required flow.
 
+## Lifestyle Suggestion Rules
+
+The prediction model remains separate from daily lifestyle coaching. The
+rule-based suggestion engine in `src/lifestyle_suggestions.py` uses recent
+check-ins to generate small, non-diagnostic actions across sleep, movement,
+diet, alcohol, maintenance, and data-support domains.
+
+Example:
+
+```python
+from src.lifestyle_suggestions import generate_lifestyle_suggestions
+
+suggestions = generate_lifestyle_suggestions(
+    checkins=[
+        {"sleep_hours": 6.0, "movement_break_frequency": "Once"},
+        {"sleep_hours": 6.5, "movement_break_frequency": "Not at all"},
+        {"sleep_hours": 6.0, "movement_break_frequency": "A few times during the day"},
+    ],
+    profile={"alcohol_frequency": "monthly"},
+)
+```
+
+Safety constraints are encoded with each suggestion: the engine does not
+diagnose, does not infer behavior from missing check-ins, does not judge from a
+single meal, accounts for physical limitations in movement advice, avoids
+labeling alcohol use, and does not imply zero risk when reinforcing maintenance.
+
 ## License
 
 This project uses publicly available NHANES data. The code is provided for research purposes.
