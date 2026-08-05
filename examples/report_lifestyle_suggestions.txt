@@ -1,0 +1,258 @@
+The lifestyle suggestion algorithm is developed as a rule-based, safety-first layer separate from the insulin-resistance prediction model. The model estimates cardiometabolic risk, while the suggestion engine uses recent check-in data to identify small, actionable behavior opportunities across sleep, movement breaks, diet, alcohol, maintenance, and data support. It first checks whether there is enough recent data. if not, it recommends one easy logging action instead of inferring behavior from missing information.
+
+The recommendations are grounded in public-health and clinical guidance, including CDC sleep guidance, the CDC National Diabetes Prevention Program, the Diabetes Prevention Program clinical trial, ADA Standards of Care, and CDC alcohol guidance. The engine uses conservative triggers, such as short recent sleep averages, repeated low movement-break frequency, repeated food-journal patterns, or alcohol frequency above a defined threshold.
+
+Diet suggestions require repeated patterns, movement advice accounts for physical limitations, and maintenance messages reinforce what is working without implying zero cardiometabolic risk.
+
+
+Here are several sets of sample inputs and outputs:
+
+=== Low data coverage ===
+Input:
+{'profile': {'age': 42,
+             'sex': 'female',
+             'race': 'Asian',
+             'height': 165,
+             'family_diabetes': 'yes',
+             'hypertension_history': 'no',
+             'hypertension_med': 'no',
+             'high_cholesterol': 'no',
+             'gestational_diabetes': 'no',
+             'alcohol_frequency': 'monthly'},
+ 'checkins': [{'date': '2026-08-03',
+               'sleep_hours': 6.0,
+               'movement_break_frequency': 'Once'}]}
+
+Output:
+[{'domain': 'data_support',
+  'title': 'Build the check-in pattern',
+  'suggestion_text': 'Log one easy item today, such as sleep hours or movement '
+                     'breaks, so future suggestions can reflect your actual '
+                     'routine.',
+  'trigger_reason': 'Only 1 recent check-in(s) are available; at least 3 are '
+                    'needed before behavior patterns are inferred.',
+  'candidate_action': 'Encourage one easy logging action.',
+  'safety_note': 'No behavior is inferred from missing check-ins.',
+  'priority': 10,
+  'confidence': 'low'}]
+
+=== Short sleep pattern ===
+Input:
+{'profile': {'age': 38,
+             'sex': 'male',
+             'race': 'Hispanic',
+             'height': 178,
+             'family_diabetes': 'no',
+             'hypertension_history': 'no',
+             'hypertension_med': 'no',
+             'high_cholesterol': 'yes',
+             'alcohol_frequency': 'monthly'},
+ 'checkins': [{'date': '2026-08-01',
+               'sleep_hours': 6.0,
+               'movement_break_frequency': 'A few times during the day'},
+              {'date': '2026-08-02',
+               'sleep_hours': 6.5,
+               'movement_break_frequency': 'A few times during the day'},
+              {'date': '2026-08-03',
+               'sleep_hours': 6.0,
+               'movement_break_frequency': 'About once every hour or more'}]}
+
+Output:
+[{'domain': 'sleep',
+  'title': 'Make a little more sleep room',
+  'suggestion_text': 'Try adding a 15- to 30-minute sleep opportunity tonight, '
+                     'such as starting your wind-down a little earlier.',
+  'trigger_reason': 'Recent average sleep is 6.2 hours, below the 7-hour adult '
+                    'threshold.',
+  'candidate_action': 'Add 15-30 minutes of sleep opportunity.',
+  'safety_note': 'This is general lifestyle guidance, not a diagnosis. '
+                 'Consider professional care for persistent sleep problems.',
+  'priority': 20,
+  'confidence': 'medium'}]
+
+=== Repeated low movement breaks ===
+Input:
+{'profile': {'age': 51,
+             'sex': 'female',
+             'race': 'Black',
+             'height': 160,
+             'family_diabetes': 'yes',
+             'hypertension_history': 'yes',
+             'hypertension_med': 'yes',
+             'high_cholesterol': 'yes',
+             'gestational_diabetes': 'not applicable',
+             'alcohol_frequency': 'less than monthly'},
+ 'checkins': [{'date': '2026-08-01',
+               'sleep_hours': 7.5,
+               'movement_break_frequency': 'Not at all',
+               'physical_activities': [{'type': 'Brisk walking',
+                                        'minutes': 15,
+                                        'source': 'Apple Health'}]},
+              {'date': '2026-08-02',
+               'sleep_hours': 7.0,
+               'movement_break_frequency': 'Once'},
+              {'date': '2026-08-03',
+               'sleep_hours': 7.2,
+               'movement_break_frequency': 'A few times during the day'}]}
+
+Output:
+[{'domain': 'movement',
+  'title': 'Add one sitting break',
+  'suggestion_text': 'Attach one 2- to 3-minute standing or walking break to a '
+                     'routine you already have, like after coffee, lunch, or a '
+                     'meeting.',
+  'trigger_reason': 'Movement breaks were low on 2 recent check-in days.',
+  'candidate_action': 'Add one movement break to an existing routine.',
+  'safety_note': 'Adapt the break to your mobility and physical limitations; '
+                 'seated range-of-motion movement can count when standing is '
+                 'not a good fit.',
+  'priority': 30,
+  'confidence': 'medium'}]
+
+=== Diet: repeated sugary drinks ===
+Input:
+{'profile': {'age': 46,
+             'sex': 'male',
+             'race': 'White',
+             'height': 182,
+             'family_diabetes': 'no',
+             'hypertension_history': 'no',
+             'hypertension_med': 'no',
+             'high_cholesterol': 'no',
+             'alcohol_frequency': 'weekly'},
+ 'checkins': [{'date': '2026-08-01',
+               'sleep_hours': 7.5,
+               'movement_break_frequency': 'few_times',
+               'food_journal': 'Breakfast sandwich, soda, chicken bowl.'},
+              {'date': '2026-08-02',
+               'sleep_hours': 7.4,
+               'movement_break_frequency': 'few_times',
+               'food_journal': 'Toast, burger, soda, chips.'},
+              {'date': '2026-08-03',
+               'sleep_hours': 7.6,
+               'movement_break_frequency': 'few_times',
+               'food_journal': 'Eggs, rice, grilled fish.'}]}
+
+Output:
+[{'domain': 'diet',
+  'title': 'Try one food swap',
+  'suggestion_text': 'Swap one sweet drink for water, sparkling water, or '
+                     'unsweetened tea tomorrow.',
+  'trigger_reason': 'Recent food journals repeatedly mention sugary drinks.',
+  'candidate_action': 'Offer one concrete substitution or addition.',
+  'safety_note': 'This uses repeated journal patterns only; no judgment is '
+                 'made from a single meal or skipped journal.',
+  'priority': 40,
+  'confidence': 'medium'}]
+
+=== Diet: low fruit and vegetable pattern ===
+Input:
+{'profile': {'age': 57,
+             'sex': 'female',
+             'race': 'Hispanic',
+             'height': 158,
+             'family_diabetes': 'yes',
+             'hypertension_history': 'no',
+             'hypertension_med': 'no',
+             'high_cholesterol': 'yes',
+             'gestational_diabetes': 'no',
+             'alcohol_frequency': 'monthly'},
+ 'checkins': [{'date': '2026-08-01',
+               'sleep_hours': 7.5,
+               'movement_break_frequency': 'few_times',
+               'food_journal': 'Egg sandwich, coffee, chicken and rice.'},
+              {'date': '2026-08-02',
+               'sleep_hours': 7.3,
+               'movement_break_frequency': 'few_times',
+               'food_journal': 'Toast, turkey sandwich, pasta.'},
+              {'date': '2026-08-03',
+               'sleep_hours': 7.6,
+               'movement_break_frequency': 'few_times',
+               'food_journal': 'Cereal, noodles, grilled chicken.'}]}
+
+Output:
+[{'domain': 'diet',
+  'title': 'Try one food swap',
+  'suggestion_text': 'Add one fruit or non-starchy vegetable to a meal you '
+                     'already planned tomorrow.',
+  'trigger_reason': 'Recent food journals include few repeated fruit or '
+                    'vegetable mentions.',
+  'candidate_action': 'Offer one concrete substitution or addition.',
+  'safety_note': 'This uses repeated journal patterns only; no judgment is '
+                 'made from a single meal or skipped journal.',
+  'priority': 40,
+  'confidence': 'medium'}]
+
+=== Alcohol frequency pattern ===
+Input:
+{'profile': {'age': 35,
+             'sex': 'female',
+             'race': 'Other',
+             'height': 170,
+             'family_diabetes': 'no',
+             'hypertension_history': 'no',
+             'hypertension_med': 'no',
+             'high_cholesterol': 'no',
+             'gestational_diabetes': 'prefer not to answer',
+             'alcohol_frequency': '4-6 times a week'},
+ 'checkins': [{'date': '2026-08-01',
+               'sleep_hours': 7.5,
+               'movement_break_frequency': 'few_times'},
+              {'date': '2026-08-02',
+               'sleep_hours': 7.0,
+               'movement_break_frequency': 'few_times'},
+              {'date': '2026-08-03',
+               'sleep_hours': 7.2,
+               'movement_break_frequency': 'few_times'}]}
+
+Output:
+[{'domain': 'alcohol',
+  'title': 'Choose one lower-alcohol occasion',
+  'suggestion_text': 'Pick one usual drinking occasion this week and make it '
+                     'lower alcohol, alcohol-free, or shorter.',
+  'trigger_reason': 'Alcohol frequency is above the configured threshold.',
+  'candidate_action': 'Choose one lower-alcohol occasion.',
+  'safety_note': 'This does not label alcohol use. People who are pregnant, '
+                 'under 21, taking interacting medicines, or advised not to '
+                 'drink should follow clinician guidance.',
+  'priority': 50,
+  'confidence': 'medium'}]
+
+=== Maintenance ===
+Input:
+{'profile': {'age': 44,
+             'sex': 'male',
+             'race': 'Asian',
+             'height': 176,
+             'family_diabetes': 'yes',
+             'hypertension_history': 'no',
+             'hypertension_med': 'no',
+             'high_cholesterol': 'no',
+             'alcohol_frequency': 'monthly'},
+ 'checkins': [{'date': '2026-08-01',
+               'sleep_hours': 7.5,
+               'movement_break_frequency': 'About once every hour or more',
+               'food_journal': 'Oatmeal, fruit, salad, beans, water.'},
+              {'date': '2026-08-02',
+               'sleep_hours': 8.0,
+               'movement_break_frequency': 'I did not spend much time sitting '
+                                           'today',
+               'food_journal': 'Eggs, vegetables, fish, brown rice.'},
+              {'date': '2026-08-03',
+               'sleep_hours': 7.2,
+               'movement_break_frequency': 'A few times during the day',
+               'food_journal': 'Greek yogurt, berries, greens, tea.'}]}
+
+Output:
+[{'domain': 'maintenance',
+  'title': 'Keep the routine that is working',
+  'suggestion_text': 'Your recent check-ins do not show a clear lifestyle '
+                     'trigger. Keep one habit that felt easiest this week and '
+                     'repeat it tomorrow.',
+  'trigger_reason': 'At least 3 recent check-ins are available and no '
+                    'configured trigger fired.',
+  'candidate_action': 'Reinforce stable or improving behavior.',
+  'safety_note': 'Staying within these behavior targets does not imply zero '
+                 'insulin resistance or cardiometabolic risk.',
+  'priority': 90,
+  'confidence': 'medium'}]

@@ -150,6 +150,15 @@ diagnose, does not infer behavior from missing check-ins, does not judge from a
 single meal, accounts for physical limitations in movement advice, avoids
 labeling alcohol use, and does not imply zero risk when reinforcing maintenance.
 
+To inspect concrete sample inputs and outputs, run:
+
+```bash
+python examples/lifestyle_suggestion_examples.py
+```
+
+The script also writes the rendered examples to
+`examples/lifestyle_suggestion_examples_output.txt`.
+
 ## License
 
 This project uses publicly available NHANES data. The code is provided for research purposes.
