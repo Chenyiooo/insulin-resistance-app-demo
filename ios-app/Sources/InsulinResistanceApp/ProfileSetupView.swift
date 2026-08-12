@@ -6,12 +6,15 @@ struct ProfileSetupView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var missingItems: [MissingDataItem] = []
     @State private var isShowingMissingDataWarning = false
+    @State private var isShowingDeleteAccountConfirmation = false
+    @State private var isShowingPrivacyNotice = false
     var isModalFlow = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                accountStatus
                 introCard
                 questionFields
                 PrimaryButton(title: isModalFlow ? "Continue" : "Save Profile") {
@@ -31,6 +34,17 @@ struct ProfileSetupView: View {
             Button("Review", role: .cancel) {}
         } message: {
             Text(missingDataMessage)
+        }
+        .confirmationDialog("Delete account and cloud data?", isPresented: $isShowingDeleteAccountConfirmation, titleVisibility: .visible) {
+            Button("Delete Account", role: .destructive) {
+                store.deleteAccount()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes your account, cloud profile, cloud check-ins, and active sessions from the backend development database.")
+        }
+        .sheet(isPresented: $isShowingPrivacyNotice) {
+            PrivacyNoticeView()
         }
     }
 
@@ -68,6 +82,47 @@ struct ProfileSetupView: View {
             Color.clear.frame(width: 28, height: 28)
         }
         .padding(.top, 22)
+    }
+
+    private var accountStatus: some View {
+        HStack(spacing: 10) {
+            Image(systemName: store.isSignedIn ? "icloud.fill" : "icloud.slash")
+                .foregroundStyle(store.isSignedIn ? AppColor.blue : AppColor.muted)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.isSignedIn ? "Signed in: \(store.accountEmail)" : "Not signed in")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppColor.text)
+                if !store.cloudSyncMessage.isEmpty {
+                    Text(store.cloudSyncMessage)
+                        .font(.caption)
+                        .foregroundStyle(AppColor.muted)
+                }
+            }
+            Spacer()
+            if store.isSignedIn {
+                Menu {
+                    Button("Privacy & Safety") {
+                        isShowingPrivacyNotice = true
+                    }
+                    Button("Export my data") {
+                        store.exportAccountData()
+                    }
+                    Button("Sign out") {
+                        store.signOut()
+                    }
+                    Button("Delete account", role: .destructive) {
+                        isShowingDeleteAccountConfirmation = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(AppColor.blue)
+                }
+            }
+        }
+        .padding(12)
+        .background(AppColor.sky)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var introCard: some View {

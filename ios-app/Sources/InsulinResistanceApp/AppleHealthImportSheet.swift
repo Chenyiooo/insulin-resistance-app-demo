@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct AppleHealthImportSheet: View {
-    let useData: () -> Void
+    @StateObject private var healthKitService = HealthKitService()
+    let useData: (HealthImportResult) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -18,33 +19,130 @@ struct AppleHealthImportSheet: View {
                 Text("Review imported data")
                     .font(.largeTitle.bold())
                     .foregroundStyle(AppColor.text)
-                Text("Prototype mode uses sample Apple Health data. The real app will request HealthKit permission and read supported data from the device.")
+                Text("The app will request Health permission and import available data from today. Review the values before using them.")
                     .font(.callout)
                     .foregroundStyle(AppColor.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: 0) {
-                ImportedHealthRow(icon: "moon.zzz", title: "Sleep", value: "7.2 hr")
-                Divider()
-                ImportedHealthRow(icon: "figure.walk", title: "Brisk walking", value: "25 min")
-                Divider()
-                ImportedHealthRow(icon: "heart.text.square", title: "Blood pressure", value: "118/76")
-                Divider()
-                ImportedHealthRow(icon: "scalemass", title: "Weight", value: "146 lb")
+            content
+
+            Spacer()
+        }
+        .padding(22)
+        .background(Color(red: 0.98, green: 0.99, blue: 1.0))
+        .task {
+            if case .idle = healthKitService.state {
+                await healthKitService.requestAndFetchToday()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch healthKitService.state {
+        case .idle, .loading:
+            VStack(spacing: 14) {
+                ProgressView()
+                    .tint(AppColor.blue)
+                Text("Requesting Health permission and reading today's data...")
+                    .font(.callout)
+                    .foregroundStyle(AppColor.muted)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(26)
             .background(.white)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
 
-            Spacer()
+        case .loaded(let result):
+            VStack(alignment: .leading, spacing: 18) {
+                if result.hasAnyData {
+                    importedRows(result)
+                    PrimaryButton(title: "Use these data") {
+                        useData(result)
+                    }
+                } else {
+                    statusMessage(
+                        title: "No Health data found for today",
+                        body: "You can still enter today's check-in manually. If you expected data here, check Apple Health permissions and whether your device has today's samples."
+                    )
+                    Button("Try Again") {
+                        Task { await healthKitService.requestAndFetchToday() }
+                    }
+                    .font(.headline)
+                    .foregroundStyle(AppColor.blue)
+                }
+            }
 
-            PrimaryButton(title: "Use these data") {
-                useData()
+        case .unavailable(let message):
+            statusMessage(title: "Apple Health unavailable", body: message)
+
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 14) {
+                statusMessage(title: "Could not import Health data", body: message)
+                Button("Try Again") {
+                    Task { await healthKitService.requestAndFetchToday() }
+                }
+                .font(.headline)
+                .foregroundStyle(AppColor.blue)
             }
         }
-        .padding(22)
-        .background(Color(red: 0.98, green: 0.99, blue: 1.0))
+    }
+
+    private func importedRows(_ result: HealthImportResult) -> some View {
+        VStack(spacing: 0) {
+            ImportedHealthRow(
+                icon: "moon.zzz",
+                title: "Sleep",
+                value: result.sleepHours.map { String(format: "%.1f hr", $0) } ?? "No data"
+            )
+            Divider()
+            ImportedHealthRow(
+                icon: "figure.walk",
+                title: result.activityName ?? "Activity",
+                value: result.activityMinutes.map { "\($0) min" } ?? "No data"
+            )
+            Divider()
+            ImportedHealthRow(
+                icon: "heart.text.square",
+                title: "Blood pressure",
+                value: bloodPressureText(result)
+            )
+            Divider()
+            ImportedHealthRow(
+                icon: "scalemass",
+                title: "Weight",
+                value: result.weightPounds.map { String(format: "%.0f lb", $0) } ?? "No data"
+            )
+        }
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+    }
+
+    private func statusMessage(title: String, body: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(AppColor.text)
+            Text(body)
+                .font(.callout)
+                .foregroundStyle(AppColor.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+    }
+
+    private func bloodPressureText(_ result: HealthImportResult) -> String {
+        guard let systolic = result.systolic, let diastolic = result.diastolic else {
+            return "No data"
+        }
+        return "\(Int(systolic.rounded()))/\(Int(diastolic.rounded()))"
     }
 }
 

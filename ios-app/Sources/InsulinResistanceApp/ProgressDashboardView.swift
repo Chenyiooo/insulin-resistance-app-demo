@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProgressDashboardView: View {
+    @EnvironmentObject private var store: AppStore
     @State private var selectedSegment = 0
 
     var body: some View {
@@ -18,6 +19,8 @@ struct ProgressDashboardView: View {
                     }
                     .pickerStyle(.segmented)
 
+                    PredictionStatusBanner(mode: store.riskPredictionMode)
+
                     if selectedSegment == 0 {
                         DailyInsightsView()
                     } else {
@@ -30,6 +33,59 @@ struct ProgressDashboardView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(.white)
+    }
+}
+
+struct PredictionStatusBanner: View {
+    let mode: RiskPredictionMode
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(mode.label)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppColor.text)
+                if let detail = mode.detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(AppColor.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(color.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var icon: String {
+        switch mode {
+        case .remoteModel:
+            return "checkmark.seal"
+        case .loadingRemote:
+            return "arrow.triangle.2.circlepath"
+        case .localFallback:
+            return "desktopcomputer"
+        case .unavailable:
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var color: Color {
+        switch mode {
+        case .remoteModel:
+            return .green
+        case .loadingRemote:
+            return AppColor.blue
+        case .localFallback:
+            return AppColor.blue
+        case .unavailable:
+            return .orange
+        }
     }
 }
 
@@ -77,15 +133,16 @@ struct DailyInsightsView: View {
                 .font(.headline)
 
             VStack(spacing: 0) {
-                SuggestionRow(icon: "figure.walk", title: "Physical activity", detail: "A 10-minute walk after your next meal could add a little more movement.") {
-                    store.screen = .activityInsight
+                ForEach(Array(store.dailyInsights.enumerated()), id: \.element.id) { index, insight in
+                    SuggestionRow(icon: insight.icon, title: insight.title, detail: insight.detail) {
+                        if insight.title == "Physical activity" {
+                            store.screen = .activityInsight
+                        }
+                    }
+                    if index < store.dailyInsights.count - 1 {
+                        Divider()
+                    }
                 }
-                Divider()
-                SuggestionRow(icon: "figure.stand", title: "Movement breaks", detail: "Try standing or walking for 2-3 minutes during your next hour of sitting.") {}
-                Divider()
-                SuggestionRow(icon: "fork.knife", title: "Food journal", detail: "Review today's meals and notice anything that stood out.") {}
-                Divider()
-                SuggestionRow(icon: "moon.zzz", title: "Sleep", detail: "Try beginning your bedtime routine 30 minutes earlier tonight.") {}
             }
             .background(.white)
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -139,7 +196,7 @@ struct WeeklyRiskView: View {
                         .tint(AppColor.blue)
                         .disabled(true)
 
-                    Text("Your estimate is 14 percentage points above the high-risk cutoff.")
+                    Text(riskComparisonText)
                         .font(.callout)
                         .foregroundStyle(AppColor.text)
                     Text("This is a screening estimate, not a diagnosis.")
@@ -181,6 +238,14 @@ struct WeeklyRiskView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
         }
+    }
+
+    private var riskComparisonText: String {
+        let cutoff = 65
+        if store.weeklyRisk.score >= cutoff {
+            return "Your estimate is \(store.weeklyRisk.score - cutoff) percentage points above the high-risk cutoff."
+        }
+        return "Your estimate is \(cutoff - store.weeklyRisk.score) percentage points below the high-risk cutoff."
     }
 }
 
@@ -230,7 +295,7 @@ struct ActivityInsightView: View {
                             Text("Today's suggestion")
                                 .font(.headline)
                                 .foregroundStyle(AppColor.blue)
-                            Text("Try taking a 10-minute walk after your next meal to add a little more movement to your day.")
+                            Text(activitySuggestion)
                                 .font(.title3)
                                 .foregroundStyle(AppColor.text)
                                 .lineSpacing(4)
@@ -260,6 +325,11 @@ struct ActivityInsightView: View {
             BottomTabBar()
         }
         .background(.white)
+    }
+
+    private var activitySuggestion: String {
+        store.dailyInsights.first { $0.title == "Physical activity" }?.detail
+        ?? "Choose one realistic way to add a little more movement to your day."
     }
 }
 

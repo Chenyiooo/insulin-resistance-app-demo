@@ -27,6 +27,10 @@ DerivedData/
 xcuserdata/
 *.xcuserdata/
 
+# ── Backend runtime data ──
+backend/app.db
+backend/app.db-*
+
 # ── OS ──
 .DS_Store
 Thumbs.db

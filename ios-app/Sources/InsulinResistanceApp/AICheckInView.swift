@@ -138,8 +138,8 @@ struct AICheckInView: View {
         }
         .background(.white)
         .sheet(isPresented: $isShowingHealthImport) {
-            AppleHealthImportSheet {
-                store.importMockAppleHealthData()
+            AppleHealthImportSheet { result in
+                store.applyHealthImport(result)
                 store.saveCheckIn(in: modelContext)
                 isShowingHealthImport = false
             }

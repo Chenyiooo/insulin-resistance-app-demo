@@ -22,6 +22,13 @@
 		100000000000000000000113 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000013 /* Assets.xcassets */; };
 		100000000000000000000114 /* AppleHealthImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000014 /* AppleHealthImportSheet.swift */; };
 		100000000000000000000115 /* PersistenceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000015 /* PersistenceModels.swift */; };
+		100000000000000000000116 /* LocalRiskEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000016 /* LocalRiskEngine.swift */; };
+		100000000000000000000117 /* HealthKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000017 /* HealthKitService.swift */; };
+		100000000000000000000118 /* ModelInputMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000019 /* ModelInputMapper.swift */; };
+		100000000000000000000119 /* RiskPredictionAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000021 /* RiskPredictionAPI.swift */; };
+		100000000000000000000120 /* AccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000022 /* AccountAPI.swift */; };
+		100000000000000000000121 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000023 /* KeychainStore.swift */; };
+		100000000000000000000122 /* PrivacyNoticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000024 /* PrivacyNoticeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,7 +47,15 @@
 		100000000000000000000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		100000000000000000000014 /* AppleHealthImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleHealthImportSheet.swift; sourceTree = "<group>"; };
 		100000000000000000000015 /* PersistenceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceModels.swift; sourceTree = "<group>"; };
+		100000000000000000000016 /* LocalRiskEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRiskEngine.swift; sourceTree = "<group>"; };
+		100000000000000000000017 /* HealthKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitService.swift; sourceTree = "<group>"; };
+		100000000000000000000018 /* InsulinResistanceApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = InsulinResistanceApp.entitlements; sourceTree = "<group>"; };
+		100000000000000000000019 /* ModelInputMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelInputMapper.swift; sourceTree = "<group>"; };
 		100000000000000000000020 /* InsulinResistanceApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InsulinResistanceApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000021 /* RiskPredictionAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskPredictionAPI.swift; sourceTree = "<group>"; };
+		100000000000000000000022 /* AccountAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountAPI.swift; sourceTree = "<group>"; };
+		100000000000000000000023 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		100000000000000000000024 /* PrivacyNoticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyNoticeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +80,7 @@
 		100000000000000000000041 /* InsulinResistanceApp */ = {
 			isa = PBXGroup;
 			children = (
+				100000000000000000000022 /* AccountAPI.swift */,
 				100000000000000000000001 /* AICheckInView.swift */,
 				100000000000000000000014 /* AppleHealthImportSheet.swift */,
 				100000000000000000000002 /* AppStore.swift */,
@@ -72,11 +88,18 @@
 				100000000000000000000004 /* CompletionView.swift */,
 				100000000000000000000005 /* DesignSystem.swift */,
 				100000000000000000000006 /* HomeView.swift */,
+				100000000000000000000017 /* HealthKitService.swift */,
 				100000000000000000000007 /* InsulinResistanceApp.swift */,
+				100000000000000000000018 /* InsulinResistanceApp.entitlements */,
+				100000000000000000000023 /* KeychainStore.swift */,
+				100000000000000000000016 /* LocalRiskEngine.swift */,
+				100000000000000000000019 /* ModelInputMapper.swift */,
 				100000000000000000000008 /* ManualCheckInView.swift */,
 				100000000000000000000009 /* ProfileSetupView.swift */,
 				100000000000000000000010 /* ProgressDashboardView.swift */,
 				100000000000000000000015 /* PersistenceModels.swift */,
+				100000000000000000000024 /* PrivacyNoticeView.swift */,
+				100000000000000000000021 /* RiskPredictionAPI.swift */,
 				100000000000000000000011 /* RootView.swift */,
 				100000000000000000000012 /* WelcomeView.swift */,
 				100000000000000000000013 /* Assets.xcassets */,
@@ -175,6 +198,13 @@
 				100000000000000000000112 /* WelcomeView.swift in Sources */,
 				100000000000000000000114 /* AppleHealthImportSheet.swift in Sources */,
 				100000000000000000000115 /* PersistenceModels.swift in Sources */,
+				100000000000000000000116 /* LocalRiskEngine.swift in Sources */,
+				100000000000000000000117 /* HealthKitService.swift in Sources */,
+				100000000000000000000118 /* ModelInputMapper.swift in Sources */,
+				100000000000000000000119 /* RiskPredictionAPI.swift in Sources */,
+				100000000000000000000120 /* AccountAPI.swift in Sources */,
+				100000000000000000000121 /* KeychainStore.swift in Sources */,
+				100000000000000000000122 /* PrivacyNoticeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -301,11 +331,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = Sources/InsulinResistanceApp/InsulinResistanceApp.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -329,11 +361,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = Sources/InsulinResistanceApp/InsulinResistanceApp.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
