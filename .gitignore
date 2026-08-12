@@ -22,7 +22,9 @@ env/
 
 # ── Swift / Xcode ──
 .build/
+.swiftpm/
 DerivedData/
+xcuserdata/
 *.xcuserdata/
 
 # ── OS ──

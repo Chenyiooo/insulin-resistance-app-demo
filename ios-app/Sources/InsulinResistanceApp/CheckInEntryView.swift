@@ -61,6 +61,7 @@ struct CheckInEntryView: View {
                 }
                 .padding(.horizontal, 28)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if showTabBar {
                 BottomTabBar()

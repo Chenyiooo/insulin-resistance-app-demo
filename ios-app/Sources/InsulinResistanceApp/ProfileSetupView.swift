@@ -1,7 +1,11 @@
 import SwiftUI
+import SwiftData
 
 struct ProfileSetupView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.modelContext) private var modelContext
+    @State private var missingItems: [MissingDataItem] = []
+    @State private var isShowingMissingDataWarning = false
     var isModalFlow = true
 
     var body: some View {
@@ -11,14 +15,39 @@ struct ProfileSetupView: View {
                 introCard
                 questionFields
                 PrimaryButton(title: isModalFlow ? "Continue" : "Save Profile") {
-                    store.showMain(tab: .home)
+                    saveProfileWithValidation()
                 }
                 .padding(.top, 4)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 28)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.white)
+        .alert("Profile saved with missing data", isPresented: $isShowingMissingDataWarning) {
+            Button("Continue Anyway") {
+                store.showMain(tab: .home)
+            }
+            Button("Review", role: .cancel) {}
+        } message: {
+            Text(missingDataMessage)
+        }
+    }
+
+    private var missingDataMessage: String {
+        if missingItems.isEmpty { return "" }
+        let labels = missingItems.map { "\($0.label): \($0.code)" }.joined(separator: "\n")
+        return "We need a little more information before we can update your risk estimate.\n\n\(labels)"
+    }
+
+    private func saveProfileWithValidation() {
+        missingItems = store.profileMissingDataItems()
+        store.saveProfile(in: modelContext)
+        if missingItems.isEmpty {
+            store.showMain(tab: .home)
+        } else {
+            isShowingMissingDataWarning = true
+        }
     }
 
     private var header: some View {
@@ -42,19 +71,27 @@ struct ProfileSetupView: View {
     }
 
     private var introCard: some View {
-        HStack(alignment: .center, spacing: 20) {
-            CloudyMascotView(size: 128)
-            VStack(alignment: .leading, spacing: 12) {
-                Text("How we use your information")
-                    .font(.title2.bold())
-                    .foregroundStyle(AppColor.ink)
-                Label("Risk estimate: Your answers help us estimate your risk related to insulin resistance.", systemImage: "shield")
-                Label("Personalized guidance: Some answers also help tailor suggestions to your needs.", systemImage: "person")
-                Divider()
-                Label("For screening and reflection only, not a medical diagnosis.", systemImage: "info.circle")
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 20) {
+                CloudyMascotView(size: 112)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("How we use your information")
+                        .font(.title2.bold())
+                        .foregroundStyle(AppColor.ink)
+                    Label("Risk estimate: Your answers help us estimate your risk related to insulin resistance.", systemImage: "shield")
+                    Label("Personalized guidance: Some answers also help tailor suggestions to your needs.", systemImage: "person")
+                }
+                .font(.callout)
+                .foregroundStyle(AppColor.ink)
             }
-            .font(.callout)
-            .foregroundStyle(AppColor.ink)
+            Divider()
+            Text("Required questions are marked with an asterisk (*). Your answers will be used to generate periodic estimates related to insulin resistance. Optional information may improve the estimate, but you can still complete your profile without providing it.")
+                .font(.callout)
+                .foregroundStyle(AppColor.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Label("For screening and reflection only, not a medical diagnosis.", systemImage: "info.circle")
+                .font(.callout)
+                .foregroundStyle(AppColor.ink)
         }
         .padding(18)
         .background(AppColor.sky)
@@ -63,39 +100,43 @@ struct ProfileSetupView: View {
 
     private var questionFields: some View {
         VStack(alignment: .leading, spacing: 18) {
-            FormField(title: "1. What is your age?", text: $store.profile.age, placeholder: "Enter your age")
+            FormField(title: "1. What is your age? *", text: $store.profile.age, placeholder: "Enter your age")
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("2. What sex were you assigned at birth?")
+                Text("2. What sex were you assigned at birth? *")
                     .font(.headline)
                     .foregroundStyle(AppColor.ink)
                 Menu {
                     Button("Female") { store.profile.sexAtBirth = "Female" }
                     Button("Male") { store.profile.sexAtBirth = "Male" }
+                    Button("Intersex") { store.profile.sexAtBirth = "Intersex" }
                     Button("Prefer not to answer") { store.profile.sexAtBirth = "Prefer not to answer" }
                 } label: {
                     SelectLikeField(value: store.profile.sexAtBirth)
                 }
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("3. Have you ever been pregnant?")
-                    .font(.headline)
-                    .foregroundStyle(AppColor.ink)
-                Picker("Pregnancy", selection: $store.profile.hasBeenPregnant) {
-                    Text("Yes").tag(true)
-                    Text("No").tag(false)
+                if store.profile.sexAtBirth == "Prefer not to answer" {
+                    Text("Choosing Prefer not to answer may prevent the app from generating a complete risk estimate.")
+                        .font(.caption)
+                        .foregroundStyle(AppColor.muted)
                 }
-                .pickerStyle(.segmented)
             }
 
-            if store.profile.hasBeenPregnant {
+            if store.profile.sexAtBirth == "Female" {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("3. Have you ever been pregnant? *")
+                        .font(.headline)
+                        .foregroundStyle(AppColor.ink)
+                    OptionGrid(options: ["Yes", "No", "Prefer not to answer"], selection: $store.profile.hasBeenPregnant)
+                }
+            }
+
+            if store.profile.sexAtBirth == "Female" && store.profile.hasBeenPregnant == "Yes" {
                 SectionCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("During any of your pregnancies, were you ever diagnosed with gestational diabetes?")
+                        Text("During any of your pregnancies, were you ever diagnosed with gestational diabetes? *")
                             .font(.headline)
                             .foregroundStyle(AppColor.ink)
-                        ForEach(["Yes", "No", "Not applicable", "Prefer not to answer"], id: \.self) { option in
+                        ForEach(["Yes", "No", "Not sure", "Prefer not to answer"], id: \.self) { option in
                             Button {
                                 store.profile.gestationalDiabetes = option
                             } label: {
@@ -118,14 +159,17 @@ struct ProfileSetupView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("5. What is your race or ethnicity? (Select all that apply)")
+                Text("4. How would you describe your race and/or ethnicity? Select all that apply. *")
                     .font(.headline)
                     .foregroundStyle(AppColor.ink)
-                SelectLikeField(value: store.profile.raceEthnicity.joined(separator: ", "))
+                MultiSelectOptions(
+                    options: ["Mexican American", "Other Hispanic", "Non-Hispanic White", "Non-Hispanic Black", "Non-Hispanic Asian", "Another race or ethnicity", "Prefer not to answer"],
+                    selections: $store.profile.raceEthnicity
+                )
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("6. What is your height?")
+                Text("5. What is your height? *")
                     .font(.headline)
                     .foregroundStyle(AppColor.ink)
                 HStack {
@@ -136,6 +180,121 @@ struct ProfileSetupView: View {
                         .textFieldStyle(AppTextFieldStyle())
                     Text("in")
                 }
+            }
+
+            SingleSelectQuestion(
+                title: "6. Have any of your close biological relatives, such as a biological parent or sibling, been diagnosed with diabetes? *",
+                options: ["Yes", "No", "Not sure", "Prefer not to answer"],
+                selection: $store.profile.familyHistoryDiabetes
+            )
+
+            SingleSelectQuestion(
+                title: "7. Have you ever been told by a health professional that you have high blood pressure? *",
+                options: ["Yes", "No", "Not sure", "Prefer not to answer"],
+                selection: $store.profile.hypertensionHistory
+            )
+
+            if store.profile.hypertensionHistory == "Yes" {
+                SingleSelectQuestion(
+                    title: "8. Are you currently taking medication prescribed for high blood pressure? *",
+                    options: ["Yes", "No", "Not sure", "Prefer not to answer"],
+                    selection: $store.profile.antihypertensiveMedication
+                )
+            }
+
+            SingleSelectQuestion(
+                title: "9. Have you ever been told by a health professional that you have high cholesterol? *",
+                options: ["Yes", "No", "Not sure", "Prefer not to answer"],
+                selection: $store.profile.highCholesterol
+            )
+
+            SingleSelectQuestion(
+                title: "10. Which best describes your current smoking status? *",
+                options: ["Never smoked", "Formerly smoked", "Currently smoke some days", "Currently smoke every day", "Prefer not to answer"],
+                selection: $store.profile.smokingStatus
+            )
+
+            SingleSelectQuestion(
+                title: "11. During the past 12 months, how often did you usually drink alcohol? *",
+                options: ["Never in the past 12 months", "Monthly or less", "2-4 times a month", "2-3 times a week", "4 or more times a week", "Prefer not to answer"],
+                selection: $store.profile.alcoholFrequency
+            )
+        }
+    }
+}
+
+struct SingleSelectQuestion: View {
+    let title: String
+    let options: [String]
+    @Binding var selection: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(AppColor.ink)
+            OptionGrid(options: options, selection: $selection)
+        }
+    }
+}
+
+struct OptionGrid: View {
+    let options: [String]
+    @Binding var selection: String
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    selection = option
+                } label: {
+                    Text(option)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(selection == option ? .white : AppColor.text)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 46)
+                        .padding(.horizontal, 8)
+                        .background(selection == option ? AppColor.blue : .white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(selection == option ? AppColor.blue : AppColor.line))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct MultiSelectOptions: View {
+    let options: [String]
+    @Binding var selections: [String]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    if option == "Prefer not to answer" {
+                        selections = [option]
+                    } else if selections.contains(option) {
+                        selections.removeAll { $0 == option }
+                    } else {
+                        selections.removeAll { $0 == "Prefer not to answer" }
+                        selections.append(option)
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: selections.contains(option) ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(AppColor.blue)
+                        Text(option)
+                            .foregroundStyle(AppColor.text)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+                }
+                .buttonStyle(.plain)
             }
         }
     }

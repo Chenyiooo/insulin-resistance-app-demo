@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct InsulinResistanceApp: App {
@@ -8,6 +9,7 @@ struct InsulinResistanceApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .modelContainer(for: [StoredUserProfile.self, StoredDailyCheckIn.self])
         }
     }
 }

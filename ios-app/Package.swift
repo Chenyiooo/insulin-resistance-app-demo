@@ -14,7 +14,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "InsulinResistanceApp",
-            path: "Sources/InsulinResistanceApp"
+            path: "Sources/InsulinResistanceApp",
+            resources: [
+                .process("Assets.xcassets"),
+                .process("Resources")
+            ]
         )
     ]
 )

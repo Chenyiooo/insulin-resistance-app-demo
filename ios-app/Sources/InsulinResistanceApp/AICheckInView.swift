@@ -1,9 +1,14 @@
 import SwiftUI
+import SwiftData
 
 struct AICheckInView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.modelContext) private var modelContext
     @State private var typedAnswer = ""
     @State private var selectedOption: String?
+    @State private var isShowingHealthImport = false
+    @State private var missingItems: [MissingDataItem] = []
+    @State private var isShowingMissingDataWarning = false
     private let options = ["Hourly or more", "A few times", "Once", "Not at all"]
 
     var body: some View {
@@ -57,25 +62,31 @@ struct AICheckInView: View {
                         }
                     }
 
-                    SectionCard {
-                        HStack(spacing: 14) {
-                            Image(systemName: "heart.fill")
-                                .font(.title)
-                                .foregroundStyle(.red)
-                                .frame(width: 58, height: 58)
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Import available health data")
-                                    .font(.headline)
-                                Text("Sleep, workouts, and other supported data")
-                                    .font(.callout)
-                                    .foregroundStyle(AppColor.muted)
+                    Button {
+                        isShowingHealthImport = true
+                    } label: {
+                        SectionCard {
+                            HStack(spacing: 14) {
+                                Image(systemName: "heart.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.red)
+                                    .frame(width: 58, height: 58)
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Import available health data")
+                                        .font(.headline)
+                                        .foregroundStyle(AppColor.text)
+                                    Text("Sleep, workouts, and other supported data")
+                                        .font(.callout)
+                                        .foregroundStyle(AppColor.muted)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(AppColor.text)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(AppColor.text)
                         }
                     }
+                    .buttonStyle(.plain)
 
                     Button {
                         store.screen = .manualCheckIn
@@ -91,6 +102,7 @@ struct AICheckInView: View {
                 .padding(.horizontal, 28)
                 .padding(.bottom, 20)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack(spacing: 14) {
                 TextField("Type your answer...", text: $typedAnswer)
@@ -105,7 +117,7 @@ struct AICheckInView: View {
                     if !typedAnswer.isEmpty {
                         store.checkIn.movementBreaks = typedAnswer
                     }
-                    store.completeCheckIn()
+                    completeWithValidation()
                 } label: {
                     Image(systemName: "paperplane.fill")
                         .font(.title2)
@@ -125,6 +137,39 @@ struct AICheckInView: View {
             BottomTabBar()
         }
         .background(.white)
+        .sheet(isPresented: $isShowingHealthImport) {
+            AppleHealthImportSheet {
+                store.importMockAppleHealthData()
+                store.saveCheckIn(in: modelContext)
+                isShowingHealthImport = false
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .alert("Check-in saved with missing data", isPresented: $isShowingMissingDataWarning) {
+            Button("Complete Anyway") {
+                store.screen = .completion
+            }
+            Button("Review", role: .cancel) {}
+        } message: {
+            Text(missingDataMessage)
+        }
+    }
+
+    private var missingDataMessage: String {
+        if missingItems.isEmpty { return "" }
+        let labels = missingItems.map { "\($0.label): \($0.code)" }.joined(separator: "\n")
+        return "We need a little more information before we can update your risk estimate.\n\n\(labels)"
+    }
+
+    private func completeWithValidation() {
+        store.checkIn.isCompleted = true
+        missingItems = store.checkInMissingDataItems()
+        store.saveCheckIn(in: modelContext)
+        if missingItems.isEmpty {
+            store.screen = .completion
+        } else {
+            isShowingMissingDataWarning = true
+        }
     }
 
     private var header: some View {

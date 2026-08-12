@@ -1,26 +1,33 @@
 import SwiftUI
+import SwiftData
 
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
-        switch store.screen {
-        case .welcome:
-            WelcomeView()
-        case .profile:
-            ProfileSetupView()
-        case .main:
-            MainTabView()
-        case .checkInEntry:
-            CheckInEntryView()
-        case .manualCheckIn:
-            ManualCheckInView()
-        case .aiCheckIn:
-            AICheckInView()
-        case .completion:
-            CompletionView()
-        case .activityInsight:
-            ActivityInsightView()
+        Group {
+            switch store.screen {
+            case .welcome:
+                WelcomeView()
+            case .profile:
+                ProfileSetupView()
+            case .main:
+                MainTabView()
+            case .checkInEntry:
+                CheckInEntryView()
+            case .manualCheckIn:
+                ManualCheckInView()
+            case .aiCheckIn:
+                AICheckInView()
+            case .completion:
+                CompletionView()
+            case .activityInsight:
+                ActivityInsightView()
+            }
+        }
+        .onAppear {
+            store.loadPersistedDataIfNeeded(from: modelContext)
         }
     }
 }
@@ -44,6 +51,7 @@ struct MainTabView: View {
                     ProfileSetupView(isModalFlow: false)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             BottomTabBar()
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -60,7 +68,7 @@ struct BottomTabBar: View {
                     if tab == .log {
                         store.startCheckIn()
                     } else {
-                        store.selectedTab = tab
+                        store.showMain(tab: tab)
                     }
                 } label: {
                     VStack(spacing: 4) {

@@ -27,6 +27,7 @@ struct ProgressDashboardView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 28)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(.white)
     }
@@ -255,6 +256,7 @@ struct ActivityInsightView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 28)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             BottomTabBar()
         }
         .background(.white)
