@@ -20,6 +20,11 @@ env/
 *.swo
 *~
 
+# ── Swift / Xcode ──
+.build/
+DerivedData/
+*.xcuserdata/
+
 # ── OS ──
 .DS_Store
 Thumbs.db
