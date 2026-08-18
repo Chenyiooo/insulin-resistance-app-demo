@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
 private enum AIQuestionStep {
     case sleep
@@ -85,6 +87,9 @@ struct AICheckInView: View {
     @State private var isShowingHealthImport = false
     @State private var missingItems: [MissingDataItem] = []
     @State private var isShowingMissingDataWarning = false
+    @State private var selectedFoodPhotos: [PhotosPickerItem] = []
+    @State private var foodPhotoBase64: [String] = []
+    @State private var isFoodDescriptionVisible = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -144,6 +149,10 @@ struct AICheckInView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+                    }
+
+                    if step == .food {
+                        foodJournalPanel
                     }
                 }
                 .padding(.horizontal, 28)
@@ -249,7 +258,7 @@ struct AICheckInView: View {
                 "I did not spend much time sitting today",
             ]
         case .food:
-            return ["Skip food journal", "Add food note"]
+            return []
         case .reflection:
             return ["Finish check-in", "Skip reflection"]
         }
@@ -259,6 +268,120 @@ struct AICheckInView: View {
         if missingItems.isEmpty { return "" }
         let labels = missingItems.map { "\($0.label): \($0.code)" }.joined(separator: "\n")
         return "Please answer before continuing.\n\n\(labels)"
+    }
+
+    private var foodJournalPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Add food journal")
+                .font(.headline)
+                .foregroundStyle(AppColor.text)
+            Text("Upload photos, describe what you ate and drank, or skip this optional question.")
+                .font(.callout)
+                .foregroundStyle(AppColor.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                PhotosPicker(selection: $selectedFoodPhotos, maxSelectionCount: 8, matching: .images) {
+                    FoodJournalActionButton(
+                        icon: "photo.on.rectangle",
+                        title: selectedFoodPhotos.isEmpty ? "Upload Photos" : "\(selectedFoodPhotos.count) Photo\(selectedFoodPhotos.count == 1 ? "" : "s") Selected"
+                    )
+                }
+                .buttonStyle(.plain)
+                .onChange(of: selectedFoodPhotos) { _, newValue in
+                    store.checkIn.foodPhotoCount = newValue.count
+                    updateFoodJournalStatus()
+                    Task {
+                        foodPhotoBase64 = await loadJPEGBase64(from: newValue)
+                        store.estimateFoodNutrition(
+                            text: store.checkIn.foodJournalDescription,
+                            imageBase64: foodPhotoBase64
+                        )
+                    }
+                }
+
+                Button {
+                    isFoodDescriptionVisible = true
+                } label: {
+                    FoodJournalActionButton(
+                        icon: "square.and.pencil",
+                        title: "Describe Food"
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isFoodDescriptionVisible {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Food description")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColor.text)
+                    TextEditor(text: $store.checkIn.foodJournalDescription)
+                        .frame(minHeight: 92)
+                        .padding(8)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+                        .onChange(of: store.checkIn.foodJournalDescription) { _, _ in
+                            updateFoodJournalStatus()
+                        }
+                    Button {
+                        estimateFoodAndContinue()
+                    } label: {
+                        Label("Estimate nutrition and continue", systemImage: "wand.and.stars")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(AppColor.blue)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.isEstimatingNutrition)
+                }
+            }
+
+            if store.checkIn.foodJournalSummary != "Not added" {
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.pie")
+                        .foregroundStyle(AppColor.blue)
+                    Text(store.checkIn.foodJournalSummary)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(AppColor.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColor.sky)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            if store.isEstimatingNutrition {
+                Label("Estimating nutrition from food input...", systemImage: "sparkles")
+                    .font(.caption)
+                    .foregroundStyle(AppColor.muted)
+            } else if !store.nutritionEstimateMessage.isEmpty {
+                Label(store.nutritionEstimateMessage, systemImage: "checkmark.seal")
+                    .font(.caption)
+                    .foregroundStyle(AppColor.muted)
+            }
+
+            Label("Nutrition values are estimates, not medical or dietary advice.", systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(AppColor.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                OutlineButton(title: "Skip food journal") {
+                    skipFoodJournal()
+                }
+                PrimaryButton(title: "Continue") {
+                    continueFromFoodJournal()
+                }
+            }
+        }
+        .padding(18)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
     }
 
     private func choose(_ option: String) {
@@ -335,15 +458,89 @@ struct AICheckInView: View {
             if !answer.isEmpty {
                 store.checkIn.foodJournal = "Added"
                 store.checkIn.foodJournalDescription = answer
-                store.estimateFoodNutrition(text: answer, imageBase64: [])
+                store.estimateFoodNutrition(text: answer, imageBase64: foodPhotoBase64)
             }
-            move(to: .reflection)
+            continueFromFoodJournal()
         case .reflection:
             if !answer.isEmpty {
                 store.checkIn.dailyReflection = answer
             }
             completeWithValidation()
         }
+    }
+
+    private func updateFoodJournalStatus() {
+        let hasDescription = !store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasPhotos = store.checkIn.foodPhotoCount > 0
+        let hasNutrition = [
+            store.checkIn.foodCalories,
+            store.checkIn.foodCarbohydrates,
+            store.checkIn.foodProtein,
+            store.checkIn.foodFat,
+        ].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if hasDescription || hasPhotos || hasNutrition {
+            store.checkIn.foodJournal = "Added"
+        } else if store.checkIn.foodJournal != "Skipped" {
+            store.checkIn.foodJournal = ""
+        }
+    }
+
+    private func estimateFoodAndContinue() {
+        let description = store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !description.isEmpty || !foodPhotoBase64.isEmpty {
+            store.checkIn.foodJournal = "Added"
+            store.estimateFoodNutrition(text: description, imageBase64: foodPhotoBase64)
+        }
+        move(to: .reflection)
+    }
+
+    private func continueFromFoodJournal() {
+        let description = store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !description.isEmpty || store.checkIn.foodPhotoCount > 0 {
+            store.checkIn.foodJournal = "Added"
+            if !description.isEmpty || !foodPhotoBase64.isEmpty {
+                store.estimateFoodNutrition(text: description, imageBase64: foodPhotoBase64)
+            }
+        } else if store.checkIn.foodJournal != "Skipped" {
+            store.checkIn.foodJournal = ""
+        }
+        move(to: .reflection)
+    }
+
+    private func skipFoodJournal() {
+        selectedFoodPhotos = []
+        foodPhotoBase64 = []
+        isFoodDescriptionVisible = false
+        store.checkIn.foodPhotoCount = 0
+        store.checkIn.foodJournalDescription = ""
+        store.checkIn.foodCalories = ""
+        store.checkIn.foodCarbohydrates = ""
+        store.checkIn.foodProtein = ""
+        store.checkIn.foodFat = ""
+        store.checkIn.foodNutritionSource = ""
+        store.checkIn.foodNutritionConfidence = ""
+        store.checkIn.foodNutritionExplanation = ""
+        store.checkIn.foodNutritionMatchedFoods = ""
+        store.nutritionEstimateMessage = ""
+        store.checkIn.foodJournal = "Skipped"
+        move(to: .reflection)
+    }
+
+    private func loadJPEGBase64(from items: [PhotosPickerItem]) async -> [String] {
+        var encodedImages: [String] = []
+        for item in items.prefix(4) {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                continue
+            }
+            let jpegData: Data
+            if let image = UIImage(data: data), let compressed = image.jpegData(compressionQuality: 0.72) {
+                jpegData = compressed
+            } else {
+                jpegData = data
+            }
+            encodedImages.append(jpegData.base64EncodedString())
+        }
+        return encodedImages
     }
 
     private func move(to nextStep: AIQuestionStep) {
