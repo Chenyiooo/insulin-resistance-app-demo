@@ -5,37 +5,53 @@ struct WelcomeView: View {
     @State private var isShowingPrivacyNotice = false
 
     var body: some View {
-        VStack(spacing: 28) {
-            Spacer(minLength: 54)
+        ScrollView {
+            VStack(spacing: 28) {
+                CloudyMascotView(size: 190)
+                    .padding(.top, 52)
 
-            CloudyMascotView(size: 220)
+                VStack(spacing: 16) {
+                    Text("Welcome")
+                        .font(.system(size: 42, weight: .bold))
+                        .foregroundStyle(.black)
+                    Text("Track, understand, and reflect on everyday habits related to insulin resistance.")
+                        .font(.title3)
+                        .foregroundStyle(AppColor.text)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(6)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 20)
+                }
 
-            VStack(spacing: 16) {
-                Text("Welcome")
-                    .font(.system(size: 42, weight: .bold))
-                    .foregroundStyle(.black)
-                Text("Track, understand, and reflect on everyday habits related to insulin resistance.")
+                Text("This app supports health awareness and healthier choices. It does not provide a medical diagnosis or replace professional medical advice.")
                     .font(.title3)
-                    .foregroundStyle(AppColor.text)
+                    .foregroundStyle(Color(red: 0.27, green: 0.36, blue: 0.51))
                     .multilineTextAlignment(.center)
                     .lineSpacing(6)
-                    .padding(.horizontal, 20)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(24)
+                    .frame(maxWidth: .infinity)
+                    .background(AppColor.sky)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.15)))
+                    .padding(.horizontal, 32)
+
+                authControls
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 38)
             }
+            .frame(maxWidth: .infinity)
+        }
+        .background(.white)
+        .sheet(isPresented: $isShowingPrivacyNotice) {
+            PrivacyNoticeView()
+        }
+    }
 
-            Text("This app supports health awareness and healthier choices. It does not provide a medical diagnosis or replace professional medical advice.")
-                .font(.title3)
-                .foregroundStyle(Color(red: 0.27, green: 0.36, blue: 0.51))
-                .multilineTextAlignment(.center)
-                .lineSpacing(6)
-                .padding(24)
-                .background(AppColor.sky)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.15)))
-                .padding(.horizontal, 32)
-
-            Spacer()
-
-            VStack(spacing: 18) {
+    private var authControls: some View {
+        VStack(spacing: 18) {
                 VStack(alignment: .leading, spacing: 10) {
                     TextField("Email", text: $store.authEmail)
                         .textInputAutocapitalization(.never)
@@ -94,13 +110,6 @@ struct WelcomeView: View {
                 }
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(AppColor.blue)
-            }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 38)
-        }
-        .background(.white)
-        .sheet(isPresented: $isShowingPrivacyNotice) {
-            PrivacyNoticeView()
         }
     }
 }

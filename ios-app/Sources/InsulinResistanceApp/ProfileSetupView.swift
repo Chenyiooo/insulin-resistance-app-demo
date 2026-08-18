@@ -27,11 +27,8 @@ struct ProfileSetupView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.white)
-        .alert("Profile saved with missing data", isPresented: $isShowingMissingDataWarning) {
-            Button("Continue Anyway") {
-                store.showMain(tab: .home)
-            }
-            Button("Review", role: .cancel) {}
+        .alert("Required profile answer missing", isPresented: $isShowingMissingDataWarning) {
+            Button("OK", role: .cancel) {}
         } message: {
             Text(missingDataMessage)
         }
@@ -51,13 +48,13 @@ struct ProfileSetupView: View {
     private var missingDataMessage: String {
         if missingItems.isEmpty { return "" }
         let labels = missingItems.map { "\($0.label): \($0.code)" }.joined(separator: "\n")
-        return "We need a little more information before we can update your risk estimate.\n\n\(labels)"
+        return "Please answer the required profile question\(missingItems.count == 1 ? "" : "s") before continuing.\n\n\(labels)"
     }
 
     private func saveProfileWithValidation() {
         missingItems = store.profileMissingDataItems()
-        store.saveProfile(in: modelContext)
         if missingItems.isEmpty {
+            store.saveProfile(in: modelContext)
             store.showMain(tab: .home)
         } else {
             isShowingMissingDataWarning = true

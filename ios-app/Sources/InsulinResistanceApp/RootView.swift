@@ -39,8 +39,6 @@ struct MainTabView: View {
         VStack(spacing: 0) {
             Group {
                 switch store.selectedTab {
-                case .cloudy:
-                    CloudyHomeView()
                 case .log:
                     CheckInEntryView(showTabBar: false)
                 case .home:

@@ -29,6 +29,8 @@
 		100000000000000000000120 /* AccountAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000022 /* AccountAPI.swift */; };
 		100000000000000000000121 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000023 /* KeychainStore.swift */; };
 		100000000000000000000122 /* PrivacyNoticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000024 /* PrivacyNoticeView.swift */; };
+		100000000000000000000123 /* NutritionEstimateAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000025 /* NutritionEstimateAPI.swift */; };
+		100000000000000000000124 /* LocalNutritionEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000026 /* LocalNutritionEstimator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +58,8 @@
 		100000000000000000000022 /* AccountAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountAPI.swift; sourceTree = "<group>"; };
 		100000000000000000000023 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		100000000000000000000024 /* PrivacyNoticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyNoticeView.swift; sourceTree = "<group>"; };
+		100000000000000000000025 /* NutritionEstimateAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionEstimateAPI.swift; sourceTree = "<group>"; };
+		100000000000000000000026 /* LocalNutritionEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNutritionEstimator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -92,9 +96,11 @@
 				100000000000000000000007 /* InsulinResistanceApp.swift */,
 				100000000000000000000018 /* InsulinResistanceApp.entitlements */,
 				100000000000000000000023 /* KeychainStore.swift */,
+				100000000000000000000026 /* LocalNutritionEstimator.swift */,
 				100000000000000000000016 /* LocalRiskEngine.swift */,
 				100000000000000000000019 /* ModelInputMapper.swift */,
 				100000000000000000000008 /* ManualCheckInView.swift */,
+				100000000000000000000025 /* NutritionEstimateAPI.swift */,
 				100000000000000000000009 /* ProfileSetupView.swift */,
 				100000000000000000000010 /* ProgressDashboardView.swift */,
 				100000000000000000000015 /* PersistenceModels.swift */,
@@ -205,6 +211,8 @@
 				100000000000000000000120 /* AccountAPI.swift in Sources */,
 				100000000000000000000121 /* KeychainStore.swift in Sources */,
 				100000000000000000000122 /* PrivacyNoticeView.swift in Sources */,
+				100000000000000000000123 /* NutritionEstimateAPI.swift in Sources */,
+				100000000000000000000124 /* LocalNutritionEstimator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -337,6 +345,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
+				INFOPLIST_KEY_IRAPIBaseURL = "http://127.0.0.1:8000";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
@@ -367,6 +376,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
+				INFOPLIST_KEY_IRAPIBaseURL = "http://127.0.0.1:8000";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;

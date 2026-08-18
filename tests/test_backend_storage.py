@@ -40,9 +40,20 @@ class BackendStorageTest(unittest.TestCase):
             data={"sleepHours": "7"},
             model_payload={"features": {"age": 34}},
             risk_result={"percent": 19},
+            source="apple_health_confirmed",
+            provenance={
+                "source": "apple_health",
+                "confirmation": "user_confirmed",
+                "imported_fields": "sleep_hours,physical_activity",
+            },
         )
+        self.assertEqual(checkin["source"], "apple_health_confirmed")
+        self.assertEqual(checkin["provenance"]["confirmation"], "user_confirmed")
         self.assertEqual(checkin["risk_result"]["percent"], 19)
-        self.assertEqual(storage.latest_checkin(user["id"])["data"]["sleepHours"], "7")
+        latest = storage.latest_checkin(user["id"])
+        self.assertEqual(latest["data"]["sleepHours"], "7")
+        self.assertEqual(latest["source"], "apple_health_confirmed")
+        self.assertEqual(latest["provenance"]["imported_fields"], "sleep_hours,physical_activity")
 
         storage.delete_session(token)
         self.assertIsNone(storage.get_user_for_token(token))
@@ -61,6 +72,8 @@ class BackendStorageTest(unittest.TestCase):
         self.assertEqual(exported["user"]["email"], "privacy@example.com")
         self.assertEqual(exported["profile"]["data"]["age"], "41")
         self.assertEqual(len(exported["checkins"]), 1)
+        self.assertEqual(exported["checkins"][0]["source"], "manual_entry")
+        self.assertIn("audit_events", exported)
         self.assertIn("exported_at", exported)
 
         storage.delete_user(user["id"])
@@ -76,6 +89,19 @@ class BackendStorageTest(unittest.TestCase):
     def test_invalid_email_is_rejected(self):
         with self.assertRaises(ValueError):
             storage.create_user("not-an-email", "password123")
+
+    def test_readiness_and_audit_events(self):
+        user = storage.create_user("audit@example.com", "password123")
+        storage.log_event(user["id"], "checkin.saved", {"source": "manual_entry", "token": "secret"})
+
+        ready = storage.readiness()
+        self.assertTrue(ready["ok"])
+        self.assertEqual(ready["database"], "sqlite")
+
+        events = storage.list_audit_events(user["id"])
+        self.assertEqual(events[0]["event_type"], "checkin.saved")
+        self.assertEqual(events[0]["metadata"]["source"], "manual_entry")
+        self.assertNotIn("token", events[0]["metadata"])
 
 
 if __name__ == "__main__":

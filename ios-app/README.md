@@ -24,7 +24,7 @@ Then run the app in Xcode. The Progress page shows whether the current estimate 
 - `Local fallback estimate`: backend unavailable or required model inputs missing
 - `Updating model estimate...`: request in progress
 
-For simulator testing, `http://127.0.0.1:8000` points to the Mac running the backend. For testing on a physical iPhone, change the API base URL in `RiskPredictionAPI.swift` to the Mac's local network IP address and make sure the phone and Mac are on the same Wi-Fi network.
+For simulator testing, `http://127.0.0.1:8000` points to the Mac running the backend. For TestFlight or physical-device testing against a deployed backend, update the Xcode build setting `INFOPLIST_KEY_IRAPIBaseURL` to the deployed HTTPS API URL. The app reads that value from `IRAPIBaseURL` in the generated Info.plist, and all account, prediction, and nutrition requests share the same base URL.
 
 ## Accounts And Cloud Sync
 

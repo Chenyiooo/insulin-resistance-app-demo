@@ -8,11 +8,11 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from backend.config import settings
 from src.lifestyle_suggestions import generate_lifestyle_suggestions
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL_PATH = REPO_ROOT / "results" / "models" / "reduced_lightgbm_bundle.joblib"
 DEFAULT_FEATURES_PATH = REPO_ROOT / "data" / "processed" / "features_used.txt"
 
 OPTIONAL_MODEL_FEATURES = {"systolic_bp", "diastolic_bp", "pulse"}
@@ -43,7 +43,8 @@ class ModelInputError(ValueError):
 
 
 class RiskPredictionService:
-    def __init__(self, model_path: Path = DEFAULT_MODEL_PATH):
+    def __init__(self, model_path: Path | None = None):
+        model_path = model_path or settings.model_path
         self.model_path = model_path
         if not model_path.exists():
             raise FileNotFoundError(

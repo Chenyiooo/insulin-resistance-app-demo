@@ -19,7 +19,7 @@ struct AppleHealthImportSheet: View {
                 Text("Review imported data")
                     .font(.largeTitle.bold())
                     .foregroundStyle(AppColor.text)
-                Text("The app will request Health permission and import available data from today. Review the values before using them.")
+                Text("The app will request Health permission and import available sleep, workouts, weight, and blood pressure. Review the values before using them.")
                     .font(.callout)
                     .foregroundStyle(AppColor.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -94,26 +94,33 @@ struct AppleHealthImportSheet: View {
         VStack(spacing: 0) {
             ImportedHealthRow(
                 icon: "moon.zzz",
-                title: "Sleep",
+                title: "Last night's sleep",
                 value: result.sleepHours.map { String(format: "%.1f hr", $0) } ?? "No data"
             )
             Divider()
             ImportedHealthRow(
                 icon: "figure.walk",
-                title: result.activityName ?? "Activity",
+                title: result.activityName ?? "Today's activity",
                 value: result.activityMinutes.map { "\($0) min" } ?? "No data"
             )
+            if !result.activities.isEmpty {
+                ForEach(result.activities) { activity in
+                    ImportedHealthSubrow(title: activity.name, value: "\(activity.minutes) min")
+                }
+            }
             Divider()
             ImportedHealthRow(
                 icon: "heart.text.square",
-                title: "Blood pressure",
-                value: bloodPressureText(result)
+                title: "Recent blood pressure",
+                value: bloodPressureText(result),
+                detail: result.bloodPressureDate.map { "Measured \(Self.shortDate($0))" }
             )
             Divider()
             ImportedHealthRow(
                 icon: "scalemass",
-                title: "Weight",
-                value: result.weightPounds.map { String(format: "%.0f lb", $0) } ?? "No data"
+                title: "Recent weight",
+                value: result.weightPounds.map { String(format: "%.0f lb", $0) } ?? "No data",
+                detail: result.weightDate.map { "Measured \(Self.shortDate($0))" }
             )
         }
         .background(.white)
@@ -144,12 +151,19 @@ struct AppleHealthImportSheet: View {
         }
         return "\(Int(systolic.rounded()))/\(Int(diastolic.rounded()))"
     }
+
+    private static func shortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
 }
 
 struct ImportedHealthRow: View {
     let icon: String
     let title: String
     let value: String
+    var detail: String?
 
     var body: some View {
         HStack(spacing: 14) {
@@ -159,14 +173,41 @@ struct ImportedHealthRow: View {
                 .frame(width: 38, height: 38)
                 .background(Color.blue.opacity(0.08))
                 .clipShape(Circle())
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(AppColor.text)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(AppColor.text)
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(AppColor.muted)
+                }
+            }
             Spacer()
             Text(value)
                 .font(.headline)
                 .foregroundStyle(AppColor.muted)
         }
         .padding(14)
+    }
+}
+
+struct ImportedHealthSubrow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(AppColor.muted)
+            Spacer()
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppColor.text)
+        }
+        .padding(.leading, 66)
+        .padding(.trailing, 14)
+        .padding(.bottom, 8)
     }
 }

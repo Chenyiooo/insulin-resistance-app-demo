@@ -14,7 +14,6 @@ enum AppScreen {
 }
 
 enum AppTab: String, CaseIterable {
-    case cloudy = "Cloudy"
     case log = "Log"
     case home = "Home"
     case progress = "Progress"
@@ -22,7 +21,6 @@ enum AppTab: String, CaseIterable {
 
     var icon: String {
         switch self {
-        case .cloudy: "cloud"
         case .log: "plus.circle"
         case .home: "house"
         case .progress: "chart.bar"
@@ -80,9 +78,14 @@ final class AppStore: ObservableObject {
     @Published var cloudSyncMessage = ""
     @Published var isAuthenticating = false
     @Published var isCloudSyncing = false
+    @Published var isEstimatingNutrition = false
+    @Published var nutritionEstimateMessage = ""
     @Published var hasAcceptedPrivacyTerms = false
+    @Published var checkInSource = "manual_entry"
+    @Published var checkInProvenance: [String: String] = [:]
     private var hasLoadedPersistedData = false
     private let riskPredictionAPI = RiskPredictionAPI()
+    private let nutritionEstimateAPI = NutritionEstimateAPI()
     private let accountAPI = AccountAPI()
     private var authToken: String?
 
@@ -118,16 +121,14 @@ final class AppStore: ObservableObject {
         screen = .completion
     }
 
-    func loadPersistedDataIfNeeded(profile: StoredUserProfile?, checkIn: StoredDailyCheckIn?) {
+    func loadPersistedDataIfNeeded(profile: StoredUserProfile?) {
         guard !hasLoadedPersistedData else { return }
         if let profile {
             self.profile = profile.userProfile
         }
-        if let checkIn {
-            self.checkIn = checkIn.dailyCheckIn
-        }
+        resetDailyCheckInForNewSession()
+        normalizeFoodJournalStatus()
         refreshLocalRiskAndInsights()
-        refreshRemoteRiskPredictionIfPossible()
         hasLoadedPersistedData = true
     }
 
@@ -136,12 +137,9 @@ final class AppStore: ObservableObject {
         let profileDescriptor = FetchDescriptor<StoredUserProfile>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        let checkInDescriptor = FetchDescriptor<StoredDailyCheckIn>(
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
         let profile = try? context.fetch(profileDescriptor).first
-        let checkIn = try? context.fetch(checkInDescriptor).first
-        loadPersistedDataIfNeeded(profile: profile, checkIn: checkIn)
+        clearStoredDailyCheckIns(in: context)
+        loadPersistedDataIfNeeded(profile: profile)
     }
 
     func saveProfile(in context: ModelContext) {
@@ -184,6 +182,23 @@ final class AppStore: ObservableObject {
         dailyInsights = result.insights
     }
 
+    private func resetDailyCheckInForNewSession() {
+        checkIn = MockData.checkIn
+        checkInSource = "manual_entry"
+        checkInProvenance = [:]
+        nutritionEstimateMessage = ""
+        isEstimatingNutrition = false
+    }
+
+    private func clearStoredDailyCheckIns(in context: ModelContext) {
+        let descriptor = FetchDescriptor<StoredDailyCheckIn>()
+        guard let savedCheckIns = try? context.fetch(descriptor) else { return }
+        for savedCheckIn in savedCheckIns {
+            context.delete(savedCheckIn)
+        }
+        try? context.save()
+    }
+
     var currentModelInputPayload: ModelInputPayload {
         ModelInputMapper.makePayload(profile: profile, checkIn: checkIn)
     }
@@ -207,6 +222,78 @@ final class AppStore: ObservableObject {
                 syncCheckInToCloud()
             }
         }
+    }
+
+    func estimateFoodNutrition(text: String? = nil, imageBase64: [String] = []) {
+        let description = text ?? checkIn.foodJournalDescription
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDescription.isEmpty || !imageBase64.isEmpty else {
+            nutritionEstimateMessage = "Add a food description or photo first."
+            return
+        }
+
+        isEstimatingNutrition = true
+        nutritionEstimateMessage = "Estimating food nutrition..."
+        Task {
+            do {
+                let result = try await nutritionEstimateAPI.estimate(
+                    text: trimmedDescription,
+                    imageBase64: imageBase64
+                )
+                applyNutritionEstimate(result)
+            } catch {
+                let fallback = LocalNutritionEstimator.estimate(
+                    text: trimmedDescription,
+                    imageCount: imageBase64.count
+                )
+                applyNutritionEstimate(fallback)
+            }
+            isEstimatingNutrition = false
+        }
+    }
+
+    private func applyNutritionEstimate(_ result: NutritionEstimateResponse) {
+        let hasNutrition = result.calories > 0 || result.carbohydrates > 0 || result.protein > 0 || result.fat > 0
+        guard hasNutrition else {
+            checkIn.foodCalories = ""
+            checkIn.foodCarbohydrates = ""
+            checkIn.foodProtein = ""
+            checkIn.foodFat = ""
+            checkIn.foodNutritionSource = result.source
+            checkIn.foodNutritionConfidence = result.confidence
+            checkIn.foodNutritionExplanation = result.explanation
+            checkIn.foodNutritionMatchedFoods = result.matchedFoods.joined(separator: ", ")
+            if !checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || checkIn.foodPhotoCount > 0 {
+                checkIn.foodJournal = "Added"
+            }
+            nutritionEstimateMessage = "Food note saved. Nutrition could not be estimated yet."
+            refreshLocalRiskAndInsights()
+            return
+        }
+        checkIn.foodCalories = "\(result.calories)"
+        checkIn.foodCarbohydrates = Self.formatMacro(result.carbohydrates)
+        checkIn.foodProtein = Self.formatMacro(result.protein)
+        checkIn.foodFat = Self.formatMacro(result.fat)
+        checkIn.foodNutritionSource = result.source
+        checkIn.foodNutritionConfidence = result.confidence
+        checkIn.foodNutritionExplanation = result.explanation
+        checkIn.foodNutritionMatchedFoods = result.matchedFoods.joined(separator: ", ")
+        checkIn.foodJournal = "Added"
+        if result.source.contains("fallback") {
+            nutritionEstimateMessage = "Low-confidence estimate: \(checkIn.foodJournalSummary)"
+        } else if result.source.contains("local") {
+            nutritionEstimateMessage = "On-device estimate: \(checkIn.foodJournalSummary)"
+        } else {
+            nutritionEstimateMessage = "AI estimate: \(checkIn.foodJournalSummary)"
+        }
+        refreshLocalRiskAndInsights()
+    }
+
+    private static func formatMacro(_ value: Double) -> String {
+        if value.rounded() == value {
+            return "\(Int(value))"
+        }
+        return String(format: "%.1f", value)
     }
 
     func logIn() {
@@ -267,6 +354,24 @@ final class AppStore: ObservableObject {
         }
     }
 
+    private func normalizeFoodJournalStatus() {
+        let hasDescription = !checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasPhotos = checkIn.foodPhotoCount > 0
+        let hasNutrition = [
+            checkIn.foodCalories,
+            checkIn.foodCarbohydrates,
+            checkIn.foodProtein,
+            checkIn.foodFat,
+        ].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if checkIn.foodJournal == "Added" && !hasDescription && !hasPhotos && !hasNutrition {
+            checkIn.foodJournal = ""
+            checkIn.foodNutritionSource = ""
+            checkIn.foodNutritionConfidence = ""
+            checkIn.foodNutritionExplanation = ""
+            checkIn.foodNutritionMatchedFoods = ""
+        }
+    }
+
     private func authenticate(isRegistering: Bool) {
         guard hasAcceptedPrivacyTerms else {
             authMessage = "Review and accept Privacy & Safety before continuing."
@@ -316,7 +421,7 @@ final class AppStore: ObservableObject {
                 }
             } catch {
                 isAuthenticating = false
-                authMessage = error.localizedDescription
+                authMessage = "Could not connect to the account server. For demo, tap Continue without account."
             }
         }
     }
@@ -330,6 +435,7 @@ final class AppStore: ObservableObject {
             }
             if let cloudCheckIn = try await accountAPI.fetchLatestCheckIn(token: authToken) {
                 checkIn = cloudCheckIn
+                normalizeFoodJournalStatus()
             }
             refreshLocalRiskAndInsights()
             refreshRemoteRiskPredictionIfPossible()
@@ -364,7 +470,9 @@ final class AppStore: ObservableObject {
                     checkIn,
                     token: authToken,
                     modelPayload: payload,
-                    riskResult: riskResult
+                    riskResult: riskResult,
+                    source: checkInSource,
+                    provenance: checkInProvenance
                 )
                 cloudSyncMessage = "Check-in synced to cloud."
             } catch {
@@ -381,15 +489,6 @@ final class AppStore: ObservableObject {
             increasing: response.increasingFactors,
             decreasing: response.decreasingFactors
         )
-        if !response.suggestions.isEmpty {
-            dailyInsights = response.suggestions.map { suggestion in
-                DailyInsight(
-                    icon: iconName(for: suggestion.domain),
-                    title: suggestion.title,
-                    detail: suggestion.text
-                )
-            }
-        }
         riskPredictionMode = .remoteModel
     }
 
@@ -435,9 +534,6 @@ final class AppStore: ObservableObject {
         addRequiredString(&items, field: "sleep_hours", label: "Sleep duration", value: checkIn.sleepHours)
         if checkIn.activeToday == nil {
             items.append(MissingDataItem(field: "physical_activity_today", label: "Physical activity", code: MissingDataCode.missing))
-        } else if checkIn.activeToday == true {
-            addRequiredString(&items, field: "activity_type", label: "Activity type", value: checkIn.activityType)
-            addRequiredString(&items, field: "activity_duration", label: "Activity duration", value: checkIn.activityDuration)
         }
         addRequiredChoice(&items, field: "movement_breaks", label: "Movement breaks", value: checkIn.movementBreaks)
         return items
@@ -461,27 +557,58 @@ final class AppStore: ObservableObject {
     }
 
     func applyHealthImport(_ result: HealthImportResult) {
+        var importedFields: [String] = []
         if let weightPounds = result.weightPounds {
             checkIn.weight = String(format: "%.0f", weightPounds)
             checkIn.weightUnit = "lb"
+            importedFields.append("weight")
         }
         if let systolic = result.systolic, let diastolic = result.diastolic {
             checkIn.systolic = String(format: "%.0f", systolic)
             checkIn.diastolic = String(format: "%.0f", diastolic)
-            checkIn.bloodPressureDate = "Today"
+            checkIn.bloodPressureDate = result.bloodPressureDate.map(Self.healthImportDateFormatter.string(from:)) ?? "Apple Health"
             checkIn.hasRecentBloodPressure = true
+            importedFields.append("blood_pressure")
         }
         if let sleepHours = result.sleepHours {
             checkIn.sleepHours = String(format: "%.1f", sleepHours)
+            importedFields.append("sleep_hours")
         }
         if let activityMinutes = result.activityMinutes, activityMinutes > 0 {
             checkIn.activeToday = true
             checkIn.activityType = result.activityName ?? "Workout"
             checkIn.activityDuration = "\(activityMinutes)"
+            importedFields.append("physical_activity")
+        }
+        if !importedFields.isEmpty {
+            checkInSource = "apple_health_confirmed"
+            checkInProvenance = [
+                "source": "apple_health",
+                "confirmation": "user_confirmed",
+                "confirmed_at": Self.isoDateFormatter.string(from: Date()),
+                "imported_fields": importedFields.joined(separator: ","),
+                "sleep_window": "last_night",
+                "activity_window": "today",
+                "body_metrics_window": "latest_30_days",
+            ]
+            if let weightDate = result.weightDate {
+                checkInProvenance["weight_measured_at"] = Self.isoDateFormatter.string(from: weightDate)
+            }
+            if let bloodPressureDate = result.bloodPressureDate {
+                checkInProvenance["blood_pressure_measured_at"] = Self.isoDateFormatter.string(from: bloodPressureDate)
+            }
         }
         refreshLocalRiskAndInsights()
         refreshRemoteRiskPredictionIfPossible()
     }
+
+    private static let healthImportDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+
+    private static let isoDateFormatter = ISO8601DateFormatter()
 
     private func iconName(for domain: String) -> String {
         switch domain {
@@ -533,8 +660,168 @@ struct DailyCheckIn: Codable {
     var activityDuration: String
     var movementBreaks: String
     var foodJournal: String
+    var foodJournalDescription: String
+    var foodPhotoCount: Int
+    var foodCalories: String
+    var foodCarbohydrates: String
+    var foodProtein: String
+    var foodFat: String
+    var foodNutritionSource: String
+    var foodNutritionConfidence: String
+    var foodNutritionExplanation: String
+    var foodNutritionMatchedFoods: String
     var dailyReflection: String
     var isCompleted: Bool
+
+    var foodJournalSummary: String {
+        if foodJournal == "Skipped" {
+            return "Skipped"
+        }
+
+        var parts: [String] = []
+        let calories = foodCalories.trimmingCharacters(in: .whitespacesAndNewlines)
+        let carbs = foodCarbohydrates.trimmingCharacters(in: .whitespacesAndNewlines)
+        let protein = foodProtein.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fat = foodFat.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !calories.isEmpty {
+            parts.append("\(calories) kcal")
+        }
+        if !carbs.isEmpty {
+            parts.append("C \(carbs)g")
+        }
+        if !protein.isEmpty {
+            parts.append("P \(protein)g")
+        }
+        if !fat.isEmpty {
+            parts.append("F \(fat)g")
+        }
+        if !parts.isEmpty {
+            return parts.joined(separator: " · ")
+        }
+        if foodPhotoCount > 0 {
+            return "\(foodPhotoCount) photo\(foodPhotoCount == 1 ? "" : "s")"
+        }
+        if !foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Notes added"
+        }
+        return "Not added"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case weight
+        case weightUnit
+        case waist
+        case waistUnit
+        case systolic
+        case diastolic
+        case bloodPressureDate
+        case hasRecentBloodPressure
+        case sleepHours
+        case activeToday
+        case activityType
+        case activityDuration
+        case movementBreaks
+        case foodJournal
+        case foodJournalDescription
+        case foodPhotoCount
+        case foodCalories
+        case foodCarbohydrates
+        case foodProtein
+        case foodFat
+        case foodNutritionSource
+        case foodNutritionConfidence
+        case foodNutritionExplanation
+        case foodNutritionMatchedFoods
+        case dailyReflection
+        case isCompleted
+    }
+
+    init(
+        weight: String,
+        weightUnit: String,
+        waist: String,
+        waistUnit: String,
+        systolic: String,
+        diastolic: String,
+        bloodPressureDate: String,
+        hasRecentBloodPressure: Bool,
+        sleepHours: String,
+        activeToday: Bool?,
+        activityType: String,
+        activityDuration: String,
+        movementBreaks: String,
+        foodJournal: String,
+        foodJournalDescription: String = "",
+        foodPhotoCount: Int = 0,
+        foodCalories: String = "",
+        foodCarbohydrates: String = "",
+        foodProtein: String = "",
+        foodFat: String = "",
+        foodNutritionSource: String = "",
+        foodNutritionConfidence: String = "",
+        foodNutritionExplanation: String = "",
+        foodNutritionMatchedFoods: String = "",
+        dailyReflection: String,
+        isCompleted: Bool
+    ) {
+        self.weight = weight
+        self.weightUnit = weightUnit
+        self.waist = waist
+        self.waistUnit = waistUnit
+        self.systolic = systolic
+        self.diastolic = diastolic
+        self.bloodPressureDate = bloodPressureDate
+        self.hasRecentBloodPressure = hasRecentBloodPressure
+        self.sleepHours = sleepHours
+        self.activeToday = activeToday
+        self.activityType = activityType
+        self.activityDuration = activityDuration
+        self.movementBreaks = movementBreaks
+        self.foodJournal = foodJournal
+        self.foodJournalDescription = foodJournalDescription
+        self.foodPhotoCount = foodPhotoCount
+        self.foodCalories = foodCalories
+        self.foodCarbohydrates = foodCarbohydrates
+        self.foodProtein = foodProtein
+        self.foodFat = foodFat
+        self.foodNutritionSource = foodNutritionSource
+        self.foodNutritionConfidence = foodNutritionConfidence
+        self.foodNutritionExplanation = foodNutritionExplanation
+        self.foodNutritionMatchedFoods = foodNutritionMatchedFoods
+        self.dailyReflection = dailyReflection
+        self.isCompleted = isCompleted
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        weight = try container.decode(String.self, forKey: .weight)
+        weightUnit = try container.decode(String.self, forKey: .weightUnit)
+        waist = try container.decode(String.self, forKey: .waist)
+        waistUnit = try container.decode(String.self, forKey: .waistUnit)
+        systolic = try container.decode(String.self, forKey: .systolic)
+        diastolic = try container.decode(String.self, forKey: .diastolic)
+        bloodPressureDate = try container.decode(String.self, forKey: .bloodPressureDate)
+        hasRecentBloodPressure = try container.decode(Bool.self, forKey: .hasRecentBloodPressure)
+        sleepHours = try container.decode(String.self, forKey: .sleepHours)
+        activeToday = try container.decodeIfPresent(Bool.self, forKey: .activeToday)
+        activityType = try container.decode(String.self, forKey: .activityType)
+        activityDuration = try container.decode(String.self, forKey: .activityDuration)
+        movementBreaks = try container.decode(String.self, forKey: .movementBreaks)
+        foodJournal = try container.decode(String.self, forKey: .foodJournal)
+        foodJournalDescription = try container.decodeIfPresent(String.self, forKey: .foodJournalDescription) ?? ""
+        foodPhotoCount = try container.decodeIfPresent(Int.self, forKey: .foodPhotoCount) ?? 0
+        foodCalories = try container.decodeIfPresent(String.self, forKey: .foodCalories) ?? ""
+        foodCarbohydrates = try container.decodeIfPresent(String.self, forKey: .foodCarbohydrates) ?? ""
+        foodProtein = try container.decodeIfPresent(String.self, forKey: .foodProtein) ?? ""
+        foodFat = try container.decodeIfPresent(String.self, forKey: .foodFat) ?? ""
+        foodNutritionSource = try container.decodeIfPresent(String.self, forKey: .foodNutritionSource) ?? ""
+        foodNutritionConfidence = try container.decodeIfPresent(String.self, forKey: .foodNutritionConfidence) ?? ""
+        foodNutritionExplanation = try container.decodeIfPresent(String.self, forKey: .foodNutritionExplanation) ?? ""
+        foodNutritionMatchedFoods = try container.decodeIfPresent(String.self, forKey: .foodNutritionMatchedFoods) ?? ""
+        dailyReflection = try container.decode(String.self, forKey: .dailyReflection)
+        isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
+    }
 }
 
 struct WeeklyRisk: Codable {
@@ -563,20 +850,30 @@ enum MockData {
     )
 
     static let checkIn = DailyCheckIn(
-        weight: "148",
+        weight: "",
         weightUnit: "lb",
-        waist: "33",
+        waist: "",
         waistUnit: "in",
-        systolic: "122",
-        diastolic: "78",
-        bloodPressureDate: "Today",
-        hasRecentBloodPressure: true,
-        sleepHours: "6",
-        activeToday: true,
-        activityType: "Brisk walking",
-        activityDuration: "18",
-        movementBreaks: "A few times during the day",
-        foodJournal: "Added",
+        systolic: "",
+        diastolic: "",
+        bloodPressureDate: "",
+        hasRecentBloodPressure: false,
+        sleepHours: "",
+        activeToday: nil,
+        activityType: "",
+        activityDuration: "",
+        movementBreaks: "",
+        foodJournal: "",
+        foodJournalDescription: "",
+        foodPhotoCount: 0,
+        foodCalories: "",
+        foodCarbohydrates: "",
+        foodProtein: "",
+        foodFat: "",
+        foodNutritionSource: "",
+        foodNutritionConfidence: "",
+        foodNutritionExplanation: "",
+        foodNutritionMatchedFoods: "",
         dailyReflection: "",
         isCompleted: false
     )

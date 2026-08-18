@@ -1,5 +1,15 @@
 import Foundation
 
+enum AppEnvironment {
+    private static let fallbackAPIBaseURLString = "http://127.0.0.1:8000"
+
+    static var apiBaseURL: URL {
+        let configuredValue = Bundle.main.object(forInfoDictionaryKey: "IRAPIBaseURL") as? String
+        let value = configuredValue?.isEmpty == false ? configuredValue! : fallbackAPIBaseURLString
+        return URL(string: value) ?? URL(string: fallbackAPIBaseURLString)!
+    }
+}
+
 struct RiskPredictionResponse: Codable {
     let modelName: String
     let modelVersion: String
@@ -63,14 +73,14 @@ enum RiskPredictionAPIError: Error, LocalizedError {
 }
 
 struct RiskPredictionAPI {
-    var baseURL = URL(string: "http://127.0.0.1:8000")!
+    var baseURL = AppEnvironment.apiBaseURL
     var session: URLSession = .shared
 
     func predict(payload: ModelInputPayload) async throws -> RiskPredictionResponse {
         var request = URLRequest(url: baseURL.appendingPathComponent("predict"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 8
+        request.timeoutInterval = 5
         request.httpBody = try JSONEncoder().encode(payload)
 
         let (data, response) = try await session.data(for: request)

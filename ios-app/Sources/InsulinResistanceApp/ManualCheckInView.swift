@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
 struct ManualCheckInView: View {
     @EnvironmentObject private var store: AppStore
@@ -8,6 +10,11 @@ struct ManualCheckInView: View {
     @State private var isShowingHealthImport = false
     @State private var missingItems: [MissingDataItem] = []
     @State private var isShowingMissingDataWarning = false
+    @State private var selectedFoodPhotos: [PhotosPickerItem] = []
+    @State private var foodPhotoBase64: [String] = []
+    @State private var isFoodJournalDescriptionVisible = false
+    @State private var isShowingActivityPrototypeNote = false
+    @State private var additionalActivities: [AdditionalActivityDraft] = []
     private let totalSteps = 4
 
     var body: some View {
@@ -15,6 +22,7 @@ struct ManualCheckInView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                    topActions
                     StepIndicator(currentStep: step, labels: ["Weekly", "Sleep", "Activity", "Reflection"])
                     stageIntro
 
@@ -27,22 +35,6 @@ struct ManualCheckInView: View {
                         }
                     }
 
-                    HStack {
-                        CloudyMascotView(size: 104)
-                        Spacer()
-                        Button {
-                            store.screen = .aiCheckIn
-                        } label: {
-                            Text("Switch to AI input")
-                                .font(.footnote.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Color.blue.opacity(0.10))
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-
                     HStack(spacing: 14) {
                         if step > 1 {
                             OutlineButton(title: "Back") {
@@ -50,12 +42,7 @@ struct ManualCheckInView: View {
                             }
                         }
                         PrimaryButton(title: step == totalSteps ? "Review check-in" : "Continue") {
-                            if step == totalSteps {
-                                completeWithValidation()
-                            } else {
-                                store.saveCheckIn(in: modelContext)
-                                step += 1
-                            }
+                            continueWithValidation()
                         }
                     }
                 }
@@ -74,30 +61,66 @@ struct ManualCheckInView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .alert("Check-in saved with missing data", isPresented: $isShowingMissingDataWarning) {
-            Button("Complete Anyway") {
-                store.screen = .completion
-            }
-            Button("Review", role: .cancel) {}
+        .alert("Required answer missing", isPresented: $isShowingMissingDataWarning) {
+            Button("OK", role: .cancel) {}
         } message: {
             Text(missingDataMessage)
+        }
+        .onAppear {
+            isFoodJournalDescriptionVisible = !store.checkIn.foodJournalDescription
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
         }
     }
 
     private var missingDataMessage: String {
         if missingItems.isEmpty { return "" }
         let labels = missingItems.map { "\($0.label): \($0.code)" }.joined(separator: "\n")
-        return "We need a little more information before we can update your risk estimate.\n\n\(labels)"
+        return "Please answer the required question\(missingItems.count == 1 ? "" : "s") before continuing.\n\n\(labels)"
     }
 
-    private func completeWithValidation() {
-        store.checkIn.isCompleted = true
-        missingItems = store.checkInMissingDataItems()
-        store.saveCheckIn(in: modelContext)
+    private func continueWithValidation() {
+        missingItems = currentStepMissingDataItems()
         if missingItems.isEmpty {
-            store.screen = .completion
+            if step == totalSteps {
+                store.checkIn.isCompleted = true
+                store.saveCheckIn(in: modelContext)
+                store.screen = .completion
+            } else {
+                store.saveCheckIn(in: modelContext)
+                step += 1
+            }
         } else {
             isShowingMissingDataWarning = true
+        }
+    }
+
+    private func currentStepMissingDataItems() -> [MissingDataItem] {
+        var items: [MissingDataItem] = []
+        switch step {
+        case 1:
+            addRequiredString(&items, field: "weight", label: "Weight", value: store.checkIn.weight)
+            addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: store.checkIn.waist)
+            if store.checkIn.hasRecentBloodPressure {
+                addRequiredString(&items, field: "systolic_bp", label: "Systolic blood pressure", value: store.checkIn.systolic)
+                addRequiredString(&items, field: "diastolic_bp", label: "Diastolic blood pressure", value: store.checkIn.diastolic)
+                addRequiredString(&items, field: "blood_pressure_date", label: "Blood pressure date measured", value: store.checkIn.bloodPressureDate)
+            }
+        case 2:
+            addRequiredString(&items, field: "sleep_hours", label: "Sleep duration", value: store.checkIn.sleepHours)
+        case 3:
+            if store.checkIn.activeToday == nil {
+                items.append(MissingDataItem(field: "physical_activity_today", label: "Physical activity", code: MissingDataCode.missing))
+            }
+        default:
+            addRequiredString(&items, field: "movement_breaks", label: "Movement breaks", value: store.checkIn.movementBreaks)
+        }
+        return items
+    }
+
+    private func addRequiredString(_ items: inout [MissingDataItem], field: String, label: String, value: String) {
+        if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            items.append(MissingDataItem(field: field, label: label, code: MissingDataCode.missing))
         }
     }
 
@@ -111,6 +134,43 @@ struct ManualCheckInView: View {
                 .foregroundStyle(AppColor.text)
         }
         .padding(.top, 20)
+    }
+
+    private var topActions: some View {
+        VStack(spacing: 10) {
+            AppleHealthRow {
+                isShowingHealthImport = true
+            }
+
+            Button {
+                store.screen = .aiCheckIn
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.title3)
+                        .foregroundStyle(AppColor.blue)
+                        .frame(width: 42, height: 42)
+                        .background(Color.blue.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Switch to AI input")
+                            .font(.headline)
+                            .foregroundStyle(AppColor.text)
+                        Text("Talk or type with Cloudy instead")
+                            .font(.caption)
+                            .foregroundStyle(AppColor.muted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(AppColor.text)
+                }
+                .padding(14)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var stageIntro: some View {
@@ -182,9 +242,6 @@ struct ManualCheckInView: View {
                     }
                 }
             }
-            AppleHealthRow {
-                isShowingHealthImport = true
-            }
         }
     }
 
@@ -192,9 +249,6 @@ struct ManualCheckInView: View {
         VStack(spacing: 14) {
             SectionCard {
                 FormField(title: "About how many hours did you sleep last night? *", text: $store.checkIn.sleepHours, placeholder: "Enter hours")
-            }
-            AppleHealthRow {
-                isShowingHealthImport = true
             }
         }
     }
@@ -207,17 +261,23 @@ struct ManualCheckInView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Tell us about your activity")
                             .font(.headline)
-                        SelectLikeField(value: store.checkIn.activityType)
-                        FormField(title: "Duration (min)", text: $store.checkIn.activityDuration, placeholder: "Enter minutes")
+                        Text("Optional. You can skip these details and still continue.")
+                            .font(.caption)
+                            .foregroundStyle(AppColor.muted)
+                        ActivityTypeMenu(selection: $store.checkIn.activityType)
+                        FormField(title: "Duration (min) (Optional)", text: $store.checkIn.activityDuration, placeholder: "Enter minutes")
                         Text("e.g., brisk walking, cycling, swimming, strength training")
                             .font(.caption)
                             .foregroundStyle(AppColor.muted)
                     }
                 }
-                AppleHealthRow {
-                    isShowingHealthImport = true
+                ForEach($additionalActivities) { $activity in
+                    AdditionalActivityCard(activity: $activity) {
+                        additionalActivities.removeAll { $0.id == activity.id }
+                    }
                 }
                 Button {
+                    additionalActivities.append(AdditionalActivityDraft())
                 } label: {
                     Text("+ Add another activity")
                         .font(.headline)
@@ -245,27 +305,7 @@ struct ManualCheckInView: View {
                     )
                 }
             }
-            SectionCard {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Would you like to add a food journal for today? (Optional)")
-                        .font(.headline)
-                    Text("Upload photos or briefly describe what you ate and drank. You can use both methods and add anything that is not shown in your photos.")
-                        .font(.callout)
-                        .foregroundStyle(AppColor.muted)
-                    HStack(spacing: 12) {
-                        OutlineButton(title: "Upload Photos") {}
-                        OutlineButton(title: "Describe What I Ate and Drank") {
-                            store.checkIn.foodJournal = "Added"
-                        }
-                    }
-                    Button("Skip for Now") {
-                        store.checkIn.foodJournal = "Skipped"
-                    }
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.purple)
-                    .frame(maxWidth: .infinity)
-                }
-            }
+            foodJournalCard
             SectionCard {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("After entering today's data, what did you notice about how your routines, behaviors, or body may be related to your metabolic health or insulin resistance risk today?")
@@ -279,10 +319,336 @@ struct ManualCheckInView: View {
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
                 }
             }
-            AppleHealthRow {
-                isShowingHealthImport = true
+        }
+    }
+
+    private var foodJournalCard: some View {
+        SectionCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Would you like to add a food journal for today? (Optional)")
+                    .font(.headline)
+                Text("Upload photos or briefly describe what you ate and drank. You can use both methods and add anything that is not shown in your photos.")
+                    .font(.callout)
+                    .foregroundStyle(AppColor.muted)
+
+                HStack(spacing: 12) {
+                    PhotosPicker(selection: $selectedFoodPhotos, maxSelectionCount: 8, matching: .images) {
+                        FoodJournalActionButton(
+                            icon: "photo.on.rectangle",
+                            title: selectedFoodPhotos.isEmpty ? "Upload Photos" : "\(selectedFoodPhotos.count) Photo\(selectedFoodPhotos.count == 1 ? "" : "s") Selected"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .onChange(of: selectedFoodPhotos) { _, newValue in
+                        store.checkIn.foodPhotoCount = newValue.count
+                        updateFoodJournalStatus()
+                        Task {
+                            foodPhotoBase64 = await loadJPEGBase64(from: newValue)
+                            store.estimateFoodNutrition(imageBase64: foodPhotoBase64)
+                        }
+                    }
+
+                    Button {
+                        isFoodJournalDescriptionVisible = true
+                    } label: {
+                        FoodJournalActionButton(
+                            icon: "square.and.pencil",
+                            title: "Describe What I Ate and Drank"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if isFoodJournalDescriptionVisible {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Food journal notes")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColor.text)
+                        TextEditor(text: $store.checkIn.foodJournalDescription)
+                            .frame(minHeight: 96)
+                            .padding(8)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+                            .onChange(of: store.checkIn.foodJournalDescription) { _, _ in
+                                updateFoodJournalStatus()
+                            }
+                        Button {
+                            store.estimateFoodNutrition(
+                                text: store.checkIn.foodJournalDescription,
+                                imageBase64: foodPhotoBase64
+                            )
+                        } label: {
+                            Label("Estimate nutrition from description", systemImage: "wand.and.stars")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(AppColor.blue)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(store.isEstimatingNutrition)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Estimated nutrition summary")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColor.text)
+                    Text("Optional. Enter an estimate if you know it, or leave blank for later AI/database analysis.")
+                        .font(.caption)
+                        .foregroundStyle(AppColor.muted)
+
+                    nutritionEstimateStatus
+
+                    if store.checkIn.foodJournal == "Skipped" {
+                        Label("Skipped for today. You can still add food details below.", systemImage: "checkmark.circle")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppColor.muted)
+                    }
+
+                    FormField(title: "Calories", text: $store.checkIn.foodCalories, placeholder: "e.g., 520")
+                        .onChange(of: store.checkIn.foodCalories) { _, _ in updateFoodJournalStatus() }
+
+                    HStack(spacing: 10) {
+                        MacroField(title: "Carbs", text: $store.checkIn.foodCarbohydrates)
+                            .onChange(of: store.checkIn.foodCarbohydrates) { _, _ in updateFoodJournalStatus() }
+                        MacroField(title: "Protein", text: $store.checkIn.foodProtein)
+                            .onChange(of: store.checkIn.foodProtein) { _, _ in updateFoodJournalStatus() }
+                        MacroField(title: "Fat", text: $store.checkIn.foodFat)
+                            .onChange(of: store.checkIn.foodFat) { _, _ in updateFoodJournalStatus() }
+                    }
+
+                    if store.checkIn.foodJournalSummary != "Not added" {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chart.pie")
+                                .foregroundStyle(AppColor.blue)
+                            Text(store.checkIn.foodJournalSummary)
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(AppColor.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColor.sky)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    if !store.checkIn.foodNutritionExplanation.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !store.checkIn.foodNutritionMatchedFoods.isEmpty {
+                                Text("Detected: \(store.checkIn.foodNutritionMatchedFoods)")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AppColor.text)
+                            }
+                            Text(store.checkIn.foodNutritionExplanation)
+                                .font(.caption)
+                                .foregroundStyle(AppColor.muted)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Button("Skip for Now") {
+                    selectedFoodPhotos = []
+                    foodPhotoBase64 = []
+                    isFoodJournalDescriptionVisible = false
+                    store.checkIn.foodPhotoCount = 0
+                    store.checkIn.foodJournalDescription = ""
+                    clearNutritionEstimate()
+                    store.checkIn.foodJournal = "Skipped"
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.purple)
+                .frame(maxWidth: .infinity)
             }
         }
+    }
+
+    private var nutritionEstimateStatus: some View {
+        HStack(spacing: 8) {
+            if store.isEstimatingNutrition {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Estimating from food input...")
+            } else if !store.nutritionEstimateMessage.isEmpty {
+                Image(systemName: "checkmark.seal")
+                    .foregroundStyle(AppColor.blue)
+                Text(store.nutritionEstimateMessage)
+            } else if !store.checkIn.foodNutritionConfidence.isEmpty {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(AppColor.blue)
+                Text("Estimate confidence: \(store.checkIn.foodNutritionConfidence)")
+            } else if store.checkIn.foodPhotoCount > 0 {
+                Image(systemName: "photo")
+                    .foregroundStyle(AppColor.blue)
+                Text("Photo selected. Nutrition will be estimated automatically when the backend is available, or with a low-confidence local fallback.")
+            } else {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(AppColor.blue)
+                Text("Upload a photo or describe food to estimate calories and macros.")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(AppColor.muted)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func updateFoodJournalStatus() {
+        let hasDescription = !store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasPhotos = store.checkIn.foodPhotoCount > 0
+        let hasNutrition = [
+            store.checkIn.foodCalories,
+            store.checkIn.foodCarbohydrates,
+            store.checkIn.foodProtein,
+            store.checkIn.foodFat,
+        ].contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if hasDescription || hasPhotos || hasNutrition {
+            store.checkIn.foodJournal = "Added"
+        } else if store.checkIn.foodJournal != "Skipped" {
+            store.checkIn.foodJournal = ""
+        }
+    }
+
+    private func clearNutritionEstimate() {
+        store.checkIn.foodCalories = ""
+        store.checkIn.foodCarbohydrates = ""
+        store.checkIn.foodProtein = ""
+        store.checkIn.foodFat = ""
+        store.checkIn.foodNutritionSource = ""
+        store.checkIn.foodNutritionConfidence = ""
+        store.checkIn.foodNutritionExplanation = ""
+        store.checkIn.foodNutritionMatchedFoods = ""
+        store.nutritionEstimateMessage = ""
+    }
+
+    private func loadJPEGBase64(from items: [PhotosPickerItem]) async -> [String] {
+        var encodedImages: [String] = []
+        for item in items.prefix(4) {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                continue
+            }
+            let jpegData: Data
+            if let image = UIImage(data: data), let compressed = image.jpegData(compressionQuality: 0.72) {
+                jpegData = compressed
+            } else {
+                jpegData = data
+            }
+            encodedImages.append(jpegData.base64EncodedString())
+        }
+        return encodedImages
+    }
+}
+
+struct MacroField: View {
+    let title: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppColor.text)
+            HStack(spacing: 4) {
+                TextField("0", text: $text)
+                    .keyboardType(.decimalPad)
+                    .textFieldStyle(AppTextFieldStyle())
+                Text("g")
+                    .font(.caption)
+                    .foregroundStyle(AppColor.muted)
+            }
+        }
+    }
+}
+
+struct AdditionalActivityDraft: Identifiable {
+    let id = UUID()
+    var activityType = ""
+    var duration = ""
+}
+
+struct AdditionalActivityCard: View {
+    @Binding var activity: AdditionalActivityDraft
+    let remove: () -> Void
+
+    var body: some View {
+        SectionCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Additional activity (Optional)")
+                        .font(.headline)
+                        .foregroundStyle(AppColor.text)
+                    Spacer()
+                    Button(action: remove) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+                ActivityTypeMenu(selection: $activity.activityType)
+                FormField(title: "Duration (min) (Optional)", text: $activity.duration, placeholder: "Enter minutes")
+            }
+        }
+    }
+}
+
+struct ActivityTypeMenu: View {
+    @Binding var selection: String
+    private let options = [
+        "Brisk walking",
+        "Cycling",
+        "Swimming",
+        "Strength training",
+        "Running",
+        "Yoga or stretching",
+        "Sports",
+        "Other activity",
+    ]
+
+    var body: some View {
+        Menu {
+            ForEach(options, id: \.self) { option in
+                Button(option) {
+                    selection = option
+                }
+            }
+            Button("Clear") {
+                selection = ""
+            }
+        } label: {
+            HStack {
+                Text(selection.isEmpty ? "Activity type (Optional)" : selection)
+                    .foregroundStyle(selection.isEmpty ? Color.gray : AppColor.ink)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .foregroundStyle(AppColor.ink)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 54)
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.4)))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct FoodJournalActionButton: View {
+    let icon: String
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title3)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundStyle(AppColor.blue)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 76)
+        .padding(.horizontal, 8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.blue))
     }
 }
 
@@ -353,16 +719,29 @@ struct YesNoCard: View {
                         .background(Color.red.opacity(0.08))
                         .clipShape(Capsule())
                 }
-                Picker(title, selection: Binding(
-                    get: { value ?? true },
-                    set: { value = $0 }
-                )) {
-                    Text("Yes").tag(true)
-                    Text("No").tag(false)
+                HStack(spacing: 0) {
+                    yesNoButton(title: "Yes", option: true)
+                    yesNoButton(title: "No", option: false)
                 }
-                .pickerStyle(.segmented)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
             }
         }
+    }
+
+    private func yesNoButton(title: String, option: Bool) -> some View {
+        Button {
+            value = option
+        } label: {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(value == option ? AppColor.blue : AppColor.text)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(value == option ? Color.blue.opacity(0.10) : .white)
+        }
+        .buttonStyle(.plain)
     }
 }
 

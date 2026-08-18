@@ -68,21 +68,3 @@ struct HomeView: View {
         .background(.white)
     }
 }
-
-struct CloudyHomeView: View {
-    var body: some View {
-        VStack(spacing: 22) {
-            Spacer()
-            CloudyMascotView(size: 210)
-            Text("Cloudy")
-                .font(.largeTitle.bold())
-                .foregroundStyle(AppColor.ink)
-            Text("Your check-in companion is ready when you are.")
-                .font(.title3)
-                .foregroundStyle(AppColor.muted)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .padding(28)
-    }
-}

@@ -38,6 +38,8 @@ struct ProfileEnvelope<T: Codable>: Codable {
 struct CheckInEnvelope<T: Codable>: Codable {
     let id: String?
     let checkInDate: String?
+    let source: String?
+    let provenance: [String: String]?
     let data: T
     let modelPayload: ModelInputPayload?
     let riskResult: RiskPredictionResponse?
@@ -45,6 +47,8 @@ struct CheckInEnvelope<T: Codable>: Codable {
     enum CodingKeys: String, CodingKey {
         case id
         case checkInDate = "checkin_date"
+        case source
+        case provenance
         case data
         case modelPayload = "model_payload"
         case riskResult = "risk_result"
@@ -52,7 +56,7 @@ struct CheckInEnvelope<T: Codable>: Codable {
 }
 
 struct AccountAPI {
-    var baseURL = URL(string: "http://127.0.0.1:8000")!
+    var baseURL = AppEnvironment.apiBaseURL
     var session: URLSession = .shared
 
     func register(email: String, password: String, name: String) async throws -> AuthResponse {
@@ -105,7 +109,9 @@ struct AccountAPI {
         _ checkIn: DailyCheckIn,
         token: String,
         modelPayload: ModelInputPayload,
-        riskResult: RiskPredictionResponse?
+        riskResult: RiskPredictionResponse?,
+        source: String,
+        provenance: [String: String]
     ) async throws {
         var request = authorizedRequest(path: "me/checkins", token: token)
         request.httpMethod = "POST"
@@ -114,6 +120,8 @@ struct AccountAPI {
             CheckInEnvelope(
                 id: nil,
                 checkInDate: Self.todayString(),
+                source: source,
+                provenance: provenance.isEmpty ? nil : provenance,
                 data: checkIn,
                 modelPayload: modelPayload,
                 riskResult: riskResult
@@ -137,7 +145,7 @@ struct AccountAPI {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 8
+        request.timeoutInterval = 5
         request.httpBody = try JSONEncoder().encode([
             "email": email,
             "password": password,
@@ -150,7 +158,7 @@ struct AccountAPI {
     private func authorizedRequest(path: String, token: String) -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 8
+        request.timeoutInterval = 5
         return request
     }
 

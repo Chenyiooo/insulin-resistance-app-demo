@@ -8,17 +8,27 @@ struct HealthImportResult {
     var sleepHours: Double?
     var activityName: String?
     var activityMinutes: Int?
+    var activities: [ImportedHealthActivity] = []
     var weightPounds: Double?
+    var weightDate: Date?
     var systolic: Double?
     var diastolic: Double?
+    var bloodPressureDate: Date?
 
     var hasAnyData: Bool {
         sleepHours != nil ||
         activityMinutes != nil ||
+        !activities.isEmpty ||
         weightPounds != nil ||
         systolic != nil ||
         diastolic != nil
     }
+}
+
+struct ImportedHealthActivity: Identifiable {
+    let id = UUID()
+    let name: String
+    let minutes: Int
 }
 
 enum HealthImportState {
@@ -72,13 +82,22 @@ final class HealthKitService: ObservableObject {
 
             let sleepHours = try await sleep
             let workoutSummary = try await workout
-            let result = try await HealthImportResult(
+            let weightReading = try await weight
+            let systolicReading = try await systolic
+            let diastolicReading = try await diastolic
+            let bloodPressureDate = [systolicReading?.date, diastolicReading?.date]
+                .compactMap { $0 }
+                .max()
+            let result = HealthImportResult(
                 sleepHours: sleepHours,
                 activityName: workoutSummary?.name,
                 activityMinutes: workoutSummary?.minutes,
-                weightPounds: weight,
-                systolic: systolic,
-                diastolic: diastolic
+                activities: workoutSummary?.activities ?? [],
+                weightPounds: weightReading?.value,
+                weightDate: weightReading?.date,
+                systolic: systolicReading?.value,
+                diastolic: diastolicReading?.value,
+                bloodPressureDate: bloodPressureDate
             )
             state = .loaded(result)
         } catch {
@@ -98,12 +117,32 @@ final class HealthKitService: ObservableObject {
 private struct WorkoutSummary {
     let name: String
     let minutes: Int
+    let activities: [ImportedHealthActivity]
 }
 
-private func todayPredicate() -> NSPredicate {
+private struct QuantityReading {
+    let value: Double
+    let date: Date
+}
+
+private func todayPredicate(options: HKQueryOptions = .strictStartDate) -> NSPredicate {
     let start = Calendar.current.startOfDay(for: Date())
     let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? Date()
-    return HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+    return HKQuery.predicateForSamples(withStart: start, end: end, options: options)
+}
+
+private func lastNightSleepPredicate() -> NSPredicate {
+    let calendar = Calendar.current
+    let startOfToday = calendar.startOfDay(for: Date())
+    let noonToday = calendar.date(bySettingHour: 12, minute: 0, second: 0, of: startOfToday) ?? Date()
+    let noonYesterday = calendar.date(byAdding: .day, value: -1, to: noonToday) ?? startOfToday
+    return HKQuery.predicateForSamples(withStart: noonYesterday, end: noonToday, options: [])
+}
+
+private func recentPredicate(days: Int) -> NSPredicate {
+    let end = Date()
+    let start = Calendar.current.date(byAdding: .day, value: -days, to: end) ?? end
+    return HKQuery.predicateForSamples(withStart: start, end: end, options: [])
 }
 
 private func fetchSleepHours(store: HKHealthStore) async throws -> Double? {
@@ -111,7 +150,7 @@ private func fetchSleepHours(store: HKHealthStore) async throws -> Double? {
         return nil
     }
     let descriptor = HKSampleQueryDescriptor(
-        predicates: [.categorySample(type: type, predicate: todayPredicate())],
+        predicates: [.categorySample(type: type, predicate: lastNightSleepPredicate())],
         sortDescriptors: []
     )
     let samples = try await descriptor.result(for: store)
@@ -135,25 +174,32 @@ private func fetchWorkoutSummary(store: HKHealthStore) async throws -> WorkoutSu
     let workouts = try await descriptor.result(for: store)
     let totalSeconds = workouts.reduce(0.0) { $0 + $1.duration }
     guard totalSeconds > 0 else { return nil }
-    let firstName = workouts.first.map { workoutName(for: $0.workoutActivityType) } ?? "Workout"
-    return WorkoutSummary(name: firstName, minutes: Int((totalSeconds / 60).rounded()))
+    let activities = workouts.map {
+        ImportedHealthActivity(
+            name: workoutName(for: $0.workoutActivityType),
+            minutes: Int(($0.duration / 60).rounded())
+        )
+    }
+    let name = activities.count == 1 ? activities[0].name : "Multiple activities"
+    return WorkoutSummary(name: name, minutes: Int((totalSeconds / 60).rounded()), activities: activities)
 }
 
 private func fetchLatestQuantity(
     store: HKHealthStore,
     identifier: HKQuantityTypeIdentifier,
     unit: HKUnit
-) async throws -> Double? {
+) async throws -> QuantityReading? {
     guard let type = HKObjectType.quantityType(forIdentifier: identifier) else {
         return nil
     }
     let descriptor = HKSampleQueryDescriptor(
-        predicates: [.quantitySample(type: type, predicate: todayPredicate())],
+        predicates: [.quantitySample(type: type, predicate: recentPredicate(days: 30))],
         sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
         limit: 1
     )
     let samples = try await descriptor.result(for: store)
-    return samples.first?.quantity.doubleValue(for: unit)
+    guard let sample = samples.first else { return nil }
+    return QuantityReading(value: sample.quantity.doubleValue(for: unit), date: sample.startDate)
 }
 
 private func workoutName(for type: HKWorkoutActivityType) -> String {

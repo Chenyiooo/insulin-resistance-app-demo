@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: insulin-resistance-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /ready
+    disk:
+      name: app-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: IR_ENV
+        value: production
+      - key: IR_API_VERSION
+        value: 0.2.0
+      - key: IR_APP_DB_PATH
+        value: /var/data/app.db
+      - key: IR_MODEL_PATH
+        value: /app/backend/model_artifacts/reduced_lightgbm_bundle.joblib
+      - key: IR_ALLOWED_ORIGINS
+        value: https://your-app.example.com
+      - key: IR_ENABLE_DOCS
+        value: "false"
+      - key: IR_MAX_BODY_BYTES
+        value: "5242880"
+      - key: IR_SESSION_DAYS
+        value: "30"
+      - key: IR_AUTH_WINDOW_SECONDS
+        value: "60"
+      - key: IR_AUTH_MAX_REQUESTS
+        value: "12"

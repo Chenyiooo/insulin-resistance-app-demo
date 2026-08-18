@@ -15,6 +15,7 @@ struct AICheckInView: View {
         VStack(spacing: 0) {
             header
             progressHeader
+            topActions
 
             ScrollView {
                 VStack(spacing: 24) {
@@ -62,42 +63,6 @@ struct AICheckInView: View {
                         }
                     }
 
-                    Button {
-                        isShowingHealthImport = true
-                    } label: {
-                        SectionCard {
-                            HStack(spacing: 14) {
-                                Image(systemName: "heart.fill")
-                                    .font(.title)
-                                    .foregroundStyle(.red)
-                                    .frame(width: 58, height: 58)
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Import available health data")
-                                        .font(.headline)
-                                        .foregroundStyle(AppColor.text)
-                                    Text("Sleep, workouts, and other supported data")
-                                        .font(.callout)
-                                        .foregroundStyle(AppColor.muted)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(AppColor.text)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        store.screen = .manualCheckIn
-                    } label: {
-                        Text("Prefer forms? ")
-                            .foregroundStyle(AppColor.text)
-                        + Text("Switch to manual input")
-                            .foregroundStyle(AppColor.blue)
-                    }
-                    .font(.callout)
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 20)
@@ -145,10 +110,7 @@ struct AICheckInView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .alert("Check-in saved with missing data", isPresented: $isShowingMissingDataWarning) {
-            Button("Complete Anyway") {
-                store.screen = .completion
-            }
+        .alert("Required answer missing", isPresented: $isShowingMissingDataWarning) {
             Button("Review", role: .cancel) {}
         } message: {
             Text(missingDataMessage)
@@ -158,17 +120,65 @@ struct AICheckInView: View {
     private var missingDataMessage: String {
         if missingItems.isEmpty { return "" }
         let labels = missingItems.map { "\($0.label): \($0.code)" }.joined(separator: "\n")
-        return "We need a little more information before we can update your risk estimate.\n\n\(labels)"
+        return "Please answer before completing this AI check-in.\n\n\(labels)"
     }
 
     private func completeWithValidation() {
-        store.checkIn.isCompleted = true
-        missingItems = store.checkInMissingDataItems()
-        store.saveCheckIn(in: modelContext)
-        if missingItems.isEmpty {
-            store.screen = .completion
-        } else {
+        if !typedAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            store.checkIn.movementBreaks = typedAnswer
+        }
+        guard !store.checkIn.movementBreaks.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            missingItems = [
+                MissingDataItem(field: "movement_breaks", label: "Movement breaks", code: MissingDataCode.missing)
+            ]
             isShowingMissingDataWarning = true
+            return
+        }
+        store.checkIn.isCompleted = true
+        store.saveCheckIn(in: modelContext)
+        store.screen = .completion
+    }
+
+    private var topActions: some View {
+        VStack(spacing: 10) {
+            AppleHealthRow {
+                isShowingHealthImport = true
+            }
+
+            Button {
+                store.screen = .manualCheckIn
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "checklist")
+                        .font(.title3)
+                        .foregroundStyle(AppColor.blue)
+                        .frame(width: 42, height: 42)
+                        .background(Color.blue.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Switch to manual input")
+                            .font(.headline)
+                            .foregroundStyle(AppColor.text)
+                        Text("Use the guided form instead")
+                            .font(.caption)
+                            .foregroundStyle(AppColor.muted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(AppColor.text)
+                }
+                .padding(14)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(.white)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AppColor.line).frame(height: 1)
         }
     }
 

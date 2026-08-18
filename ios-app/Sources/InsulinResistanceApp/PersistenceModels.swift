@@ -139,6 +139,16 @@ final class StoredDailyCheckIn {
     var activityDuration: String
     var movementBreaks: String
     var foodJournal: String
+    var foodJournalDescription: String = ""
+    var foodPhotoCount: Int = 0
+    var foodCalories: String = ""
+    var foodCarbohydrates: String = ""
+    var foodProtein: String = ""
+    var foodFat: String = ""
+    var foodNutritionSource: String = ""
+    var foodNutritionConfidence: String = ""
+    var foodNutritionExplanation: String = ""
+    var foodNutritionMatchedFoods: String = ""
     var dailyReflection: String
     var isCompleted: Bool
     var missingDataJSON: String
@@ -160,6 +170,16 @@ final class StoredDailyCheckIn {
         self.activityDuration = checkIn.activityDuration
         self.movementBreaks = checkIn.movementBreaks
         self.foodJournal = checkIn.foodJournal
+        self.foodJournalDescription = checkIn.foodJournalDescription
+        self.foodPhotoCount = checkIn.foodPhotoCount
+        self.foodCalories = checkIn.foodCalories
+        self.foodCarbohydrates = checkIn.foodCarbohydrates
+        self.foodProtein = checkIn.foodProtein
+        self.foodFat = checkIn.foodFat
+        self.foodNutritionSource = checkIn.foodNutritionSource
+        self.foodNutritionConfidence = checkIn.foodNutritionConfidence
+        self.foodNutritionExplanation = checkIn.foodNutritionExplanation
+        self.foodNutritionMatchedFoods = checkIn.foodNutritionMatchedFoods
         self.dailyReflection = checkIn.dailyReflection
         self.isCompleted = checkIn.isCompleted
         self.missingDataJSON = MissingDataCodec.encode(missingItems)
@@ -181,6 +201,16 @@ final class StoredDailyCheckIn {
         activityDuration = checkIn.activityDuration
         movementBreaks = checkIn.movementBreaks
         foodJournal = checkIn.foodJournal
+        foodJournalDescription = checkIn.foodJournalDescription
+        foodPhotoCount = checkIn.foodPhotoCount
+        foodCalories = checkIn.foodCalories
+        foodCarbohydrates = checkIn.foodCarbohydrates
+        foodProtein = checkIn.foodProtein
+        foodFat = checkIn.foodFat
+        foodNutritionSource = checkIn.foodNutritionSource
+        foodNutritionConfidence = checkIn.foodNutritionConfidence
+        foodNutritionExplanation = checkIn.foodNutritionExplanation
+        foodNutritionMatchedFoods = checkIn.foodNutritionMatchedFoods
         dailyReflection = checkIn.dailyReflection
         isCompleted = checkIn.isCompleted
         missingDataJSON = MissingDataCodec.encode(missingItems)
@@ -203,6 +233,16 @@ final class StoredDailyCheckIn {
             activityDuration: activityDuration,
             movementBreaks: movementBreaks,
             foodJournal: foodJournal,
+            foodJournalDescription: foodJournalDescription,
+            foodPhotoCount: foodPhotoCount,
+            foodCalories: foodCalories,
+            foodCarbohydrates: foodCarbohydrates,
+            foodProtein: foodProtein,
+            foodFat: foodFat,
+            foodNutritionSource: foodNutritionSource,
+            foodNutritionConfidence: foodNutritionConfidence,
+            foodNutritionExplanation: foodNutritionExplanation,
+            foodNutritionMatchedFoods: foodNutritionMatchedFoods,
             dailyReflection: dailyReflection,
             isCompleted: isCompleted
         )

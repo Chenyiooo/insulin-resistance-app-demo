@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time
 from collections import defaultdict, deque
 from typing import Callable
@@ -10,22 +9,17 @@ from starlette.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-
-DEFAULT_ALLOWED_ORIGINS = "http://127.0.0.1:8000,http://localhost:8000"
-MAX_BODY_BYTES = int(os.environ.get("IR_MAX_BODY_BYTES", str(512 * 1024)))
-AUTH_WINDOW_SECONDS = 60
-AUTH_MAX_REQUESTS = 12
+from backend.config import settings
 
 
 def allowed_origins() -> list[str]:
-    configured = os.environ.get("IR_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
-    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return list(settings.allowed_origins)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > MAX_BODY_BYTES:
+        if content_length and int(content_length) > settings.max_body_bytes:
             return JSONResponse(status_code=413, content={"detail": "Request body too large."})
 
         response = await call_next(request)
@@ -48,9 +42,9 @@ class InMemoryAuthRateLimitMiddleware(BaseHTTPMiddleware):
             key = f"{client}:{request.url.path}"
             now = time.time()
             attempts = self._attempts[key]
-            while attempts and now - attempts[0] > AUTH_WINDOW_SECONDS:
+            while attempts and now - attempts[0] > settings.auth_window_seconds:
                 attempts.popleft()
-            if len(attempts) >= AUTH_MAX_REQUESTS:
+            if len(attempts) >= settings.auth_max_requests:
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many authentication attempts. Try again later."},
