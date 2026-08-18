@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from backend.config import settings
 from backend.service import ModelInputError, RiskPredictionService, prediction_to_dict
 from backend import storage
-from backend.nutrition import estimate_nutrition, validate_base64_images
+from backend.nutrition import estimate_nutrition, get_nutrition_ai_status, validate_base64_images
 from backend.security import InMemoryAuthRateLimitMiddleware, SecurityHeadersMiddleware, allowed_origins
 
 
@@ -295,6 +295,11 @@ def estimate_food_nutrition(request: NutritionEstimateRequest) -> dict[str, Any]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return estimate_nutrition(text=request.text, image_base64=request.image_base64)
+
+
+@app.get("/nutrition/status")
+def nutrition_ai_status() -> dict[str, Any]:
+    return get_nutrition_ai_status()
 
 
 @app.post("/predict", response_model=PredictResponse)

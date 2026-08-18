@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 import urllib.error
@@ -10,10 +11,19 @@ from dataclasses import dataclass
 from typing import Any
 
 
+logger = logging.getLogger(__name__)
+
 DISCLAIMER = (
     "Nutrition values are estimates for reflection only, not medical or dietary advice. "
     "Accuracy depends on food identification, portion size, recipe, and preparation method."
 )
+
+LAST_OPENAI_STATUS: dict[str, Any] = {
+    "attempted": False,
+    "ok": False,
+    "last_error_type": "not_attempted",
+    "last_http_status": None,
+}
 
 
 @dataclass(frozen=True)
@@ -83,9 +93,9 @@ def estimate_nutrition(text: str = "", image_base64: list[str] | None = None) ->
             source="photo_fallback",
             confidence="low",
             explanation=(
-                "Photo upload was received, but no vision model is configured on the "
-                "backend. This uses a conservative generic meal estimate until the "
-                "photo can be identified by a model."
+                "Photo upload was received, but the AI vision estimate is unavailable. "
+                "This uses a conservative generic meal estimate until the photo can be "
+                "identified by a model."
             ),
         )
 
@@ -157,6 +167,7 @@ def _portion_multiplier(text: str, aliases: tuple[str, ...]) -> float:
 def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] | None:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
+        _record_openai_status(ok=False, error_type="not_configured")
         return None
 
     content: list[dict[str, Any]] = [
@@ -183,7 +194,7 @@ def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] 
         )
 
     payload = {
-        "model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-5-mini"),
+        "model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-4o-mini"),
         "input": [{"role": "user", "content": content}],
     }
     request = urllib.request.Request(
@@ -195,28 +206,50 @@ def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] 
         },
         method="POST",
     )
+    _record_openai_status(ok=False, error_type="request_started")
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:500]
+        _record_openai_status(ok=False, error_type="http_error", http_status=exc.code)
+        logger.warning("OpenAI nutrition request failed status=%s body=%s", exc.code, body)
+        return None
+    except urllib.error.URLError as exc:
+        _record_openai_status(ok=False, error_type="url_error")
+        logger.warning("OpenAI nutrition request failed: %s", exc)
+        return None
+    except TimeoutError:
+        _record_openai_status(ok=False, error_type="timeout")
+        logger.warning("OpenAI nutrition request timed out")
+        return None
+    except json.JSONDecodeError:
+        _record_openai_status(ok=False, error_type="invalid_response_json")
+        logger.warning("OpenAI nutrition response was not valid JSON")
         return None
 
     text_output = _extract_openai_text(raw)
     if not text_output:
+        _record_openai_status(ok=False, error_type="missing_output_text")
+        logger.warning("OpenAI nutrition response did not include output text")
         return None
     try:
         parsed = json.loads(text_output)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", text_output, flags=re.DOTALL)
         if not match:
+            _record_openai_status(ok=False, error_type="invalid_output_json")
+            logger.warning("OpenAI nutrition output was not valid JSON: %s", text_output[:500])
             return None
         try:
             parsed = json.loads(match.group(0))
         except json.JSONDecodeError:
+            _record_openai_status(ok=False, error_type="invalid_output_json")
+            logger.warning("OpenAI nutrition output JSON extraction failed: %s", text_output[:500])
             return None
 
     try:
-        return _format_result(
+        result = _format_result(
             calories=_safe_nonnegative_float(parsed.get("calories", 0)),
             carbohydrates=_safe_nonnegative_float(parsed.get("carbohydrates", 0)),
             protein=_safe_nonnegative_float(parsed.get("protein", 0)),
@@ -226,7 +259,11 @@ def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] 
             confidence=str(parsed.get("confidence", "medium")),
             explanation=str(parsed.get("explanation", "Estimated from food photo/text input.")),
         )
+        _record_openai_status(ok=True, error_type=None)
+        return result
     except (TypeError, ValueError):
+        _record_openai_status(ok=False, error_type="invalid_nutrition_values")
+        logger.warning("OpenAI nutrition output contained invalid nutrition values: %s", parsed)
         return None
 
 
@@ -235,6 +272,26 @@ def _safe_nonnegative_float(value: Any) -> float:
     if parsed < 0:
         raise ValueError("Nutrition values must be nonnegative.")
     return parsed
+
+
+def _record_openai_status(*, ok: bool, error_type: str | None, http_status: int | None = None) -> None:
+    LAST_OPENAI_STATUS.update(
+        {
+            "attempted": error_type != "not_configured",
+            "ok": ok,
+            "last_error_type": error_type,
+            "last_http_status": http_status,
+        }
+    )
+
+
+def get_nutrition_ai_status() -> dict[str, Any]:
+    return {
+        "openai_api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-4o-mini"),
+        "image_detail": os.getenv("OPENAI_NUTRITION_IMAGE_DETAIL", "high"),
+        **LAST_OPENAI_STATUS,
+    }
 
 
 def _extract_openai_text(response: dict[str, Any]) -> str:
