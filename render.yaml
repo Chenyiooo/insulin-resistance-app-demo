@@ -2,19 +2,15 @@ services:
   - type: web
     name: insulin-resistance-api
     runtime: docker
-    plan: starter
+    plan: free
     healthCheckPath: /ready
-    disk:
-      name: app-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: IR_ENV
         value: production
       - key: IR_API_VERSION
         value: 0.2.0
       - key: IR_APP_DB_PATH
-        value: /var/data/app.db
+        value: /tmp/app.db
       - key: IR_MODEL_PATH
         value: /app/backend/model_artifacts/reduced_lightgbm_bundle.joblib
       - key: IR_ALLOWED_ORIGINS

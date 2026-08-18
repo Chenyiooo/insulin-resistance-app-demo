@@ -197,7 +197,9 @@ By default the API stores account and app data in:
 backend/app.db
 ```
 
-This is a local SQLite development database that behaves like the cloud database from the app's point of view. It is ignored by Git. For deployment, set `IR_APP_DB_PATH` to a persistent path such as a mounted Render disk.
+This is a local SQLite development database that behaves like the cloud database from the app's point of view. It is ignored by Git.
+
+For the free Render demo, `IR_APP_DB_PATH` is set to `/tmp/app.db`. This avoids paid persistent disk setup, but data can be lost when the service restarts or redeploys.
 
 For a larger production rollout, replace SQLite with a managed Postgres database and keep the same endpoint contracts.
 
@@ -206,7 +208,7 @@ For a larger production rollout, replace SQLite with a managed Postgres database
 The repo includes:
 
 - `Dockerfile`: container image for the FastAPI service.
-- `render.yaml`: Render Blueprint using a persistent disk at `/var/data`.
+- `render.yaml`: free Render Blueprint for a demo API.
 - `.env.example`: environment variables to copy into your deployment settings.
 
 Important environment variables:
@@ -214,7 +216,7 @@ Important environment variables:
 ```bash
 export IR_ENV=production
 export IR_API_VERSION=0.2.0
-export IR_APP_DB_PATH=/var/data/app.db
+export IR_APP_DB_PATH=/tmp/app.db
 export IR_MODEL_PATH=/app/backend/model_artifacts/reduced_lightgbm_bundle.joblib
 export IR_ALLOWED_ORIGINS="https://your-app.example.com"
 export IR_ENABLE_DOCS=false
