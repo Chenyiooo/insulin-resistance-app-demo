@@ -400,6 +400,11 @@ struct ManualCheckInView: View {
 
                     nutritionEstimateStatus
 
+                    Label("Nutrition values are estimates, not medical or dietary advice.", systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(AppColor.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     if store.checkIn.foodJournal == "Skipped" {
                         Label("Skipped for today. You can still add food details below.", systemImage: "checkmark.circle")
                             .font(.caption.weight(.semibold))

@@ -99,10 +99,13 @@ If `OPENAI_API_KEY` is configured, the endpoint uses a vision/language model for
 
 ```bash
 export OPENAI_API_KEY="..."
-export OPENAI_NUTRITION_MODEL="gpt-5"
+export OPENAI_NUTRITION_MODEL="gpt-5-mini"
+export OPENAI_NUTRITION_IMAGE_DETAIL="high"
 ```
 
-Without an API key, typed descriptions fall back to local common-serving nutrition rules. Photo-only inputs return a low-confidence generic meal estimate so the app remains usable during development.
+On Render, set `OPENAI_API_KEY` in **Environment** as a secret value. Do not commit the key to GitHub. `OPENAI_NUTRITION_MODEL` and `OPENAI_NUTRITION_IMAGE_DETAIL` can stay in `render.yaml`.
+
+Without an API key, typed descriptions fall back to local common-serving nutrition rules. Photo-only inputs return a low-confidence generic meal estimate so the app remains usable during development. Nutrition values are estimates for reflection only, not medical or dietary advice.
 
 ## Account And Cloud Data Endpoints
 

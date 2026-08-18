@@ -59,7 +59,7 @@ struct LocalNutritionEstimator {
                 source: "photo_fallback",
                 confidence: "low",
                 explanation: "The backend nutrition service was unavailable, so this is a generic meal estimate from the uploaded photo count.",
-                disclaimer: "Nutrition values are estimates for reflection only."
+                disclaimer: Self.disclaimer
             )
         }
 
@@ -72,9 +72,11 @@ struct LocalNutritionEstimator {
             source: "ios_local_rules",
             confidence: matchedFoods.count >= 2 ? "medium" : "low",
             explanation: matchedFoods.isEmpty ? "No recognizable food was found." : "Estimated on device from common serving-size nutrition values.",
-            disclaimer: "Nutrition values are estimates for reflection only."
+            disclaimer: Self.disclaimer
         )
     }
+
+    private static let disclaimer = "Nutrition values are estimates for reflection only, not medical or dietary advice."
 
     private static func portionMultiplier(for text: String) -> Double {
         var multiplier = 1.0

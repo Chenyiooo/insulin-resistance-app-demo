@@ -25,3 +25,7 @@ services:
         value: "60"
       - key: IR_AUTH_MAX_REQUESTS
         value: "12"
+      - key: OPENAI_NUTRITION_MODEL
+        value: gpt-5-mini
+      - key: OPENAI_NUTRITION_IMAGE_DETAIL
+        value: high

@@ -11,8 +11,8 @@ from typing import Any
 
 
 DISCLAIMER = (
-    "Nutrition values are estimates for reflection only. Accuracy depends on food "
-    "identification, portion size, recipe, and preparation method."
+    "Nutrition values are estimates for reflection only, not medical or dietary advice. "
+    "Accuracy depends on food identification, portion size, recipe, and preparation method."
 )
 
 
@@ -164,9 +164,11 @@ def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] 
             "type": "input_text",
             "text": (
                 "Estimate calories and macronutrients for this food intake. "
-                "Use photos and text together. Return only JSON with keys: "
+                "Use photos and text together, and treat portion size as uncertain unless it is clearly stated. "
+                "Return only JSON with keys: "
                 "calories, carbohydrates, protein, fat, matched_foods, confidence, explanation. "
-                "Use grams for macros. If uncertain, be conservative and explain uncertainty. "
+                "Use grams for macros. Do not provide medical advice, diet prescriptions, or moral judgments. "
+                "If uncertain, be conservative and explain uncertainty. "
                 f"Typed description: {text or '(none)'}"
             ),
         }
@@ -176,11 +178,12 @@ def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] 
             {
                 "type": "input_image",
                 "image_url": f"data:image/jpeg;base64,{encoded}",
+                "detail": os.getenv("OPENAI_NUTRITION_IMAGE_DETAIL", "high"),
             }
         )
 
     payload = {
-        "model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-5"),
+        "model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-5-mini"),
         "input": [{"role": "user", "content": content}],
     }
     request = urllib.request.Request(
@@ -207,18 +210,31 @@ def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] 
         match = re.search(r"\{.*\}", text_output, flags=re.DOTALL)
         if not match:
             return None
-        parsed = json.loads(match.group(0))
+        try:
+            parsed = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
 
-    return _format_result(
-        calories=float(parsed.get("calories", 0)),
-        carbohydrates=float(parsed.get("carbohydrates", 0)),
-        protein=float(parsed.get("protein", 0)),
-        fat=float(parsed.get("fat", 0)),
-        matched_foods=[str(item) for item in parsed.get("matched_foods", [])],
-        source="vision_language_model",
-        confidence=str(parsed.get("confidence", "medium")),
-        explanation=str(parsed.get("explanation", "Estimated from food photo/text input.")),
-    )
+    try:
+        return _format_result(
+            calories=_safe_nonnegative_float(parsed.get("calories", 0)),
+            carbohydrates=_safe_nonnegative_float(parsed.get("carbohydrates", 0)),
+            protein=_safe_nonnegative_float(parsed.get("protein", 0)),
+            fat=_safe_nonnegative_float(parsed.get("fat", 0)),
+            matched_foods=[str(item) for item in parsed.get("matched_foods", [])],
+            source="vision_language_model",
+            confidence=str(parsed.get("confidence", "medium")),
+            explanation=str(parsed.get("explanation", "Estimated from food photo/text input.")),
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_nonnegative_float(value: Any) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise ValueError("Nutrition values must be nonnegative.")
+    return parsed
 
 
 def _extract_openai_text(response: dict[str, Any]) -> str:
