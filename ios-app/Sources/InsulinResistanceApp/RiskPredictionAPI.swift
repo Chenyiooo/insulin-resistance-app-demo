@@ -1,7 +1,7 @@
 import Foundation
 
 enum AppEnvironment {
-    private static let fallbackAPIBaseURLString = "http://127.0.0.1:8000"
+    private static let fallbackAPIBaseURLString = "https://insulin-resistance-api.onrender.com"
 
     static var apiBaseURL: URL {
         let configuredValue = Bundle.main.object(forInfoDictionaryKey: "IRAPIBaseURL") as? String

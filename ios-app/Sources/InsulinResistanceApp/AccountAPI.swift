@@ -69,7 +69,7 @@ struct AccountAPI {
 
     func fetchProfile(token: String) async throws -> UserProfile? {
         let request = authorizedRequest(path: "me/profile", token: token)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await responseData(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw RiskPredictionAPIError.invalidResponse
         }
@@ -92,7 +92,7 @@ struct AccountAPI {
 
     func fetchLatestCheckIn(token: String) async throws -> DailyCheckIn? {
         let request = authorizedRequest(path: "me/checkins/latest", token: token)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await responseData(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw RiskPredictionAPIError.invalidResponse
         }
@@ -163,7 +163,7 @@ struct AccountAPI {
     }
 
     private func validatedData(for request: URLRequest) async throws -> Data {
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await responseData(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw RiskPredictionAPIError.invalidResponse
         }
@@ -171,6 +171,31 @@ struct AccountAPI {
             return data
         }
         throw decodeServerError(data: data, statusCode: httpResponse.statusCode)
+    }
+
+    private func responseData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: request)
+        } catch let error as URLError where Self.shouldRetry(error) {
+            await warmBackend()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            return try await session.data(for: request)
+        }
+    }
+
+    private func warmBackend() async {
+        var request = URLRequest(url: baseURL.appendingPathComponent("ready"))
+        request.timeoutInterval = 20
+        _ = try? await session.data(for: request)
+    }
+
+    private static func shouldRetry(_ error: URLError) -> Bool {
+        switch error.code {
+        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .networkConnectionLost, .timedOut:
+            return true
+        default:
+            return false
+        }
     }
 
     private func decodeServerError(data: Data, statusCode: Int) -> Error {

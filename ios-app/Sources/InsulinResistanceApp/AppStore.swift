@@ -443,7 +443,7 @@ final class AppStore: ObservableObject {
                 }
             } catch {
                 isAuthenticating = false
-                authMessage = "\(error.localizedDescription) For demo, you can tap Continue without account."
+                authMessage = "\(error.localizedDescription) Please try again once; the free demo server may still be waking up. For demo, you can tap Continue without account."
             }
         }
     }
