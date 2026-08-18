@@ -345,7 +345,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
-				INFOPLIST_KEY_IRAPIBaseURL = "http://127.0.0.1:8000";
+				INFOPLIST_KEY_IRAPIBaseURL = "https://insulin-resistance-api.onrender.com";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
@@ -376,7 +376,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
-				INFOPLIST_KEY_IRAPIBaseURL = "http://127.0.0.1:8000";
+				INFOPLIST_KEY_IRAPIBaseURL = "https://insulin-resistance-api.onrender.com";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
