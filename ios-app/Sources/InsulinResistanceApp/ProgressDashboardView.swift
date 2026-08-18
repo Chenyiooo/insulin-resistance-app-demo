@@ -136,9 +136,8 @@ struct DailyInsightsView: View {
             VStack(spacing: 0) {
                 ForEach(Array(store.dailyInsights.enumerated()), id: \.element.id) { index, insight in
                     SuggestionRow(insight: insight) {
-                        if insight.title == "Physical activity" {
-                            store.screen = .activityInsight
-                        }
+                        store.selectedDailyInsightTitle = insight.title
+                        store.screen = .activityInsight
                     }
                     if index < store.dailyInsights.count - 1 {
                         Divider()
@@ -301,13 +300,13 @@ struct ActivityInsightView: View {
     @EnvironmentObject private var store: AppStore
 
     private var insight: DailyInsight {
-        store.dailyInsights.first { $0.title == "Physical activity" }
+        store.dailyInsights.first { $0.title == store.selectedDailyInsightTitle }
         ?? DailyInsight(
-            icon: "figure.walk",
-            title: "Physical activity",
-            whatWeNoticed: "No physical activity answer was logged today.",
-            whyItMayMatter: "Without activity information, the app should not infer whether today was active or inactive.",
-            nextStep: "Try answering the activity question tomorrow, even if the answer is no."
+            icon: "sparkles",
+            title: store.selectedDailyInsightTitle,
+            whatWeNoticed: "No saved detail was found for this insight.",
+            whyItMayMatter: "The app should not invent details when the underlying check-in data is missing.",
+            nextStep: "Return to Daily Insights and choose another card."
         )
     }
 
@@ -326,7 +325,7 @@ struct ActivityInsightView: View {
                     .padding(.top, 24)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Physical Activity")
+                        Text(insight.title)
                             .font(.largeTitle.bold())
                             .foregroundStyle(AppColor.text)
                         Text(Self.dayFormatter.string(from: Date()))
@@ -339,10 +338,10 @@ struct ActivityInsightView: View {
                             Text("What you logged")
                                 .font(.headline)
                                 .foregroundStyle(AppColor.blue)
-                            Text(activityDurationText)
+                            Text(loggedSummaryText)
                                 .font(.title.bold())
                                 .foregroundStyle(AppColor.text)
-                            Text("moderate activity")
+                            Text(loggedSummaryCaption)
                                 .font(.headline)
                                 .foregroundStyle(AppColor.text)
                         }
@@ -390,6 +389,38 @@ struct ActivityInsightView: View {
         formatter.dateFormat = "MMMM d"
         return formatter
     }()
+
+    private var loggedSummaryText: String {
+        switch insight.title {
+        case "Sleep":
+            let trimmed = store.checkIn.sleepHours.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "Not logged" : "\(trimmed) hr"
+        case "Physical activity":
+            return activityDurationText
+        case "Movement breaks":
+            let trimmed = store.checkIn.movementBreaks.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "Not logged" : trimmed
+        case "Food reflection", "Food journal":
+            return store.checkIn.foodJournalSummary
+        default:
+            return "Today's check-in"
+        }
+    }
+
+    private var loggedSummaryCaption: String {
+        switch insight.title {
+        case "Sleep":
+            return "sleep duration"
+        case "Physical activity":
+            return store.checkIn.activityType.isEmpty ? "physical activity" : store.checkIn.activityType.lowercased()
+        case "Movement breaks":
+            return "movement breaks"
+        case "Food reflection", "Food journal":
+            return "food reflection"
+        default:
+            return "daily insight"
+        }
+    }
 
     private var activityDurationText: String {
         let trimmed = store.checkIn.activityDuration.trimmingCharacters(in: .whitespacesAndNewlines)

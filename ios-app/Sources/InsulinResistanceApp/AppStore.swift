@@ -81,6 +81,7 @@ final class AppStore: ObservableObject {
     @Published var isEstimatingNutrition = false
     @Published var nutritionEstimateMessage = ""
     @Published var dailyInsightsSource = "Local rules"
+    @Published var selectedDailyInsightTitle = "Physical activity"
     @Published var hasAcceptedPrivacyTerms = false
     @Published var checkInSource = "manual_entry"
     @Published var checkInProvenance: [String: String] = [:]
