@@ -80,12 +80,14 @@ final class AppStore: ObservableObject {
     @Published var isCloudSyncing = false
     @Published var isEstimatingNutrition = false
     @Published var nutritionEstimateMessage = ""
+    @Published var dailyInsightsSource = "Local rules"
     @Published var hasAcceptedPrivacyTerms = false
     @Published var checkInSource = "manual_entry"
     @Published var checkInProvenance: [String: String] = [:]
     private var hasLoadedPersistedData = false
     private let riskPredictionAPI = RiskPredictionAPI()
     private let nutritionEstimateAPI = NutritionEstimateAPI()
+    private let dailyInsightsAPI = DailyInsightsAPI()
     private let accountAPI = AccountAPI()
     private var authToken: String?
 
@@ -117,6 +119,7 @@ final class AppStore: ObservableObject {
     func completeCheckIn() {
         checkIn.isCompleted = true
         refreshLocalRiskAndInsights()
+        refreshRemoteDailyInsightsIfPossible()
         refreshRemoteRiskPredictionIfPossible()
         screen = .completion
     }
@@ -173,6 +176,7 @@ final class AppStore: ObservableObject {
         }
         try? context.save()
         refreshLocalRiskAndInsights()
+        refreshRemoteDailyInsightsIfPossible()
         refreshRemoteRiskPredictionIfPossible()
     }
 
@@ -180,6 +184,22 @@ final class AppStore: ObservableObject {
         let result = LocalRiskEngine.evaluate(profile: profile, checkIn: checkIn)
         weeklyRisk = result.risk
         dailyInsights = result.insights
+        dailyInsightsSource = "Local rules"
+    }
+
+    func refreshRemoteDailyInsightsIfPossible() {
+        let currentCheckIn = checkIn
+        Task {
+            do {
+                let response = try await dailyInsightsAPI.generate(checkIn: currentCheckIn)
+                let mapped = response.insights.map(\.dailyInsight)
+                guard !mapped.isEmpty else { return }
+                dailyInsights = mapped
+                dailyInsightsSource = response.source == "openai_rewrite" ? "OpenAI rewrite" : "Backend rules fallback"
+            } catch {
+                dailyInsightsSource = "Local rules fallback"
+            }
+        }
     }
 
     private func resetDailyCheckInForNewSession() {
@@ -268,6 +288,7 @@ final class AppStore: ObservableObject {
             }
             nutritionEstimateMessage = "Food note saved. Nutrition could not be estimated yet."
             refreshLocalRiskAndInsights()
+            refreshRemoteDailyInsightsIfPossible()
             return
         }
         checkIn.foodCalories = "\(result.calories)"
@@ -287,6 +308,7 @@ final class AppStore: ObservableObject {
             nutritionEstimateMessage = "AI estimate: \(checkIn.foodJournalSummary)"
         }
         refreshLocalRiskAndInsights()
+        refreshRemoteDailyInsightsIfPossible()
     }
 
     private static func formatMacro(_ value: Double) -> String {
@@ -599,6 +621,7 @@ final class AppStore: ObservableObject {
             }
         }
         refreshLocalRiskAndInsights()
+        refreshRemoteDailyInsightsIfPossible()
         refreshRemoteRiskPredictionIfPossible()
     }
 

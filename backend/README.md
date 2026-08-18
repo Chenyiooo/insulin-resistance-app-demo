@@ -109,6 +109,28 @@ Use `GET /nutrition/status` to confirm the backend can see the OpenAI configurat
 
 Without an API key, typed descriptions fall back to local common-serving nutrition rules. Photo-only inputs return a low-confidence generic meal estimate so the app remains usable during development. Nutrition values are estimates for reflection only, not medical or dietary advice.
 
+### `POST /insights/daily`
+
+Generates daily insight cards from the submitted check-in:
+
+```bash
+curl -X POST http://127.0.0.1:8000/insights/daily \
+  -H "Content-Type: application/json" \
+  -d '{
+    "check_in": {
+      "sleepHours": "5.5",
+      "activeToday": true,
+      "activityType": "Brisk walking",
+      "activityDuration": "18",
+      "movementBreaks": "A few times during the day",
+      "foodJournal": "Added",
+      "foodJournalDescription": "rice bowl with chicken"
+    }
+  }'
+```
+
+The endpoint always builds a structured rule-based plan first. If `OPENAI_API_KEY` is configured, OpenAI rewrites that plan into more natural, supportive language without changing the title, icon, logged facts, or recommendation direction. If OpenAI is unavailable, over quota, or returns unsafe/unparseable output, the endpoint returns the rule-based fallback with `source: "rule_fallback"`.
+
 ## Account And Cloud Data Endpoints
 
 ### `POST /auth/register`

@@ -29,3 +29,5 @@ services:
         value: gpt-4o-mini
       - key: OPENAI_NUTRITION_IMAGE_DETAIL
         value: high
+      - key: OPENAI_INSIGHTS_MODEL
+        value: gpt-4o-mini

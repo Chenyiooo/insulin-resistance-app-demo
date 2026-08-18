@@ -31,6 +31,7 @@
 		100000000000000000000122 /* PrivacyNoticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000024 /* PrivacyNoticeView.swift */; };
 		100000000000000000000123 /* NutritionEstimateAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000025 /* NutritionEstimateAPI.swift */; };
 		100000000000000000000124 /* LocalNutritionEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000026 /* LocalNutritionEstimator.swift */; };
+		100000000000000000000125 /* DailyInsightsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000027 /* DailyInsightsAPI.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 		100000000000000000000024 /* PrivacyNoticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyNoticeView.swift; sourceTree = "<group>"; };
 		100000000000000000000025 /* NutritionEstimateAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionEstimateAPI.swift; sourceTree = "<group>"; };
 		100000000000000000000026 /* LocalNutritionEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNutritionEstimator.swift; sourceTree = "<group>"; };
+		100000000000000000000027 /* DailyInsightsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyInsightsAPI.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +92,7 @@
 				100000000000000000000002 /* AppStore.swift */,
 				100000000000000000000003 /* CheckInEntryView.swift */,
 				100000000000000000000004 /* CompletionView.swift */,
+				100000000000000000000027 /* DailyInsightsAPI.swift */,
 				100000000000000000000005 /* DesignSystem.swift */,
 				100000000000000000000006 /* HomeView.swift */,
 				100000000000000000000017 /* HealthKitService.swift */,
@@ -213,6 +216,7 @@
 				100000000000000000000122 /* PrivacyNoticeView.swift in Sources */,
 				100000000000000000000123 /* NutritionEstimateAPI.swift in Sources */,
 				100000000000000000000124 /* LocalNutritionEstimator.swift in Sources */,
+				100000000000000000000125 /* DailyInsightsAPI.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -154,6 +154,11 @@ struct DailyInsightsView: View {
                 .foregroundStyle(AppColor.muted)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 10)
+
+            Text("Insight source: \(store.dailyInsightsSource)")
+                .font(.caption2)
+                .foregroundStyle(AppColor.muted)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 

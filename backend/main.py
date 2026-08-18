@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from backend.config import settings
+from backend.daily_insights import generate_daily_insights
 from backend.service import ModelInputError, RiskPredictionService, prediction_to_dict
 from backend import storage
 from backend.nutrition import estimate_nutrition, get_nutrition_ai_status, validate_base64_images
@@ -137,6 +138,24 @@ class NutritionEstimateResponse(BaseModel):
     source: str
     confidence: str
     explanation: str
+    disclaimer: str
+
+
+class DailyInsightsRequest(BaseModel):
+    check_in: dict[str, Any] = Field(default_factory=dict)
+
+
+class DailyInsightResponse(BaseModel):
+    icon: str
+    title: str
+    what_we_noticed: str
+    why_it_may_matter: str
+    next_step: str
+
+
+class DailyInsightsResponse(BaseModel):
+    source: str
+    insights: list[DailyInsightResponse]
     disclaimer: str
 
 
@@ -300,6 +319,11 @@ def estimate_food_nutrition(request: NutritionEstimateRequest) -> dict[str, Any]
 @app.get("/nutrition/status")
 def nutrition_ai_status() -> dict[str, Any]:
     return get_nutrition_ai_status()
+
+
+@app.post("/insights/daily", response_model=DailyInsightsResponse)
+def daily_insights(request: DailyInsightsRequest) -> dict[str, Any]:
+    return generate_daily_insights(request.check_in)
 
 
 @app.post("/predict", response_model=PredictResponse)
