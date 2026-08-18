@@ -299,6 +299,34 @@ def estimate_food_nutrition(request: NutritionEstimateRequest) -> dict[str, Any]
 
 @app.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest) -> dict[str, Any]:
+    if request.modelName and request.modelName != service.model_name:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "The requested model name does not match the loaded backend model.",
+                "expected": service.model_name,
+                "received": request.modelName,
+            },
+        )
+    if request.modelVersion and request.modelVersion != service.model_version:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "The requested model version does not match the loaded backend model.",
+                "expected": service.model_version,
+                "received": request.modelVersion,
+            },
+        )
+    if request.featureOrder and request.featureOrder != service.features:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "The submitted feature order does not match the loaded backend model.",
+                "expected_features": service.features,
+                "received_features": request.featureOrder,
+            },
+        )
+
     if request.missingRequiredInputs:
         missing = [item.field for item in request.missingRequiredInputs]
         raise HTTPException(
@@ -311,7 +339,7 @@ def predict(request: PredictRequest) -> dict[str, Any]:
 
     try:
         result = service.predict(
-            request.dict(),
+            request.model_dump(),
             recent_checkins=request.recentCheckIns,
         )
     except ModelInputError as exc:
@@ -320,6 +348,14 @@ def predict(request: PredictRequest) -> dict[str, Any]:
             detail={
                 "message": str(exc),
                 "missing_features": exc.missing_features,
+            },
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Prediction failed while running the loaded model.",
+                "error_type": exc.__class__.__name__,
             },
         ) from exc
 

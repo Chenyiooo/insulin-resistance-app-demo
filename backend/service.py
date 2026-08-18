@@ -147,6 +147,7 @@ class RiskPredictionService:
 
         values: dict[str, float] = {}
         imputed_features: list[str] = []
+        invalid_required: list[str] = []
         for feature in self.features:
             raw_value = features.get(feature, np.nan)
             if raw_value is None or raw_value == "":
@@ -157,8 +158,16 @@ class RiskPredictionService:
                 value = np.nan
 
             if np.isnan(value):
+                if feature not in OPTIONAL_MODEL_FEATURES:
+                    invalid_required.append(feature)
                 imputed_features.append(feature)
             values[feature] = value
+
+        if invalid_required:
+            raise ModelInputError(
+                f"Missing or invalid required model inputs: {invalid_required}",
+                missing_features=invalid_required,
+            )
 
         frame = pd.DataFrame([values], columns=self.features)
         return self.imputer.transform(frame), imputed_features
