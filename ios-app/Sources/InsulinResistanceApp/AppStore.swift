@@ -443,7 +443,7 @@ final class AppStore: ObservableObject {
                 }
             } catch {
                 isAuthenticating = false
-                authMessage = "Could not connect to the account server. For demo, tap Continue without account."
+                authMessage = "\(error.localizedDescription) For demo, you can tap Continue without account."
             }
         }
     }

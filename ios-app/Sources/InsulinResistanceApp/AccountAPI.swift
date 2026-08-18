@@ -145,7 +145,7 @@ struct AccountAPI {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 5
+        request.timeoutInterval = 20
         request.httpBody = try JSONEncoder().encode([
             "email": email,
             "password": password,
@@ -158,7 +158,7 @@ struct AccountAPI {
     private func authorizedRequest(path: String, token: String) -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 5
+        request.timeoutInterval = 20
         return request
     }
 
@@ -177,7 +177,34 @@ struct AccountAPI {
         if let error = try? JSONDecoder().decode(AccountAPIError.self, from: data) {
             return RiskPredictionAPIError.serverMessage(error.detail)
         }
+        if let message = Self.detailMessage(from: data) {
+            return RiskPredictionAPIError.serverMessage(message)
+        }
         return RiskPredictionAPIError.serverMessage("Request failed with status \(statusCode).")
+    }
+
+    private static func detailMessage(from data: Data) -> String? {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let detail = json["detail"]
+        else {
+            return nil
+        }
+        if let detail = detail as? String {
+            return detail
+        }
+        if let items = detail as? [[String: Any]] {
+            let messages = items.compactMap { item -> String? in
+                if let message = item["msg"] as? String {
+                    return message
+                }
+                return nil
+            }
+            if !messages.isEmpty {
+                return messages.joined(separator: " ")
+            }
+        }
+        return nil
     }
 
     private static func todayString() -> String {
