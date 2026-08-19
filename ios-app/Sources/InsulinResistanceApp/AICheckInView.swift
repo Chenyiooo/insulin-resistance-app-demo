@@ -35,13 +35,13 @@ private enum AIQuestionStep {
         case .activity:
             return "Were you physically active today?"
         case .activityDetails:
-            return "Tell me what kind of activity you did and about how long it lasted. You can skip details if you want."
+            return "Tell me what kind of activity you did and about how long it lasted."
         case .movement:
             return "During sitting periods today, how often did you get up and move for at least 2-3 minutes?"
         case .food:
             return "Would you like to add a food journal for today? This is optional."
         case .reflection:
-            return "Anything else you noticed about sleep, movement, food, energy, stress, or your routine today? This is optional."
+            return "What did you notice about sleep, movement, food, energy, stress, or your routine today?"
         }
     }
 
@@ -210,9 +210,11 @@ struct AICheckInView: View {
         case .sleep:
             return "Hi \(store.profile.name)! I’ll ask each check-in question one at a time."
         case .activityDetails:
-            return "Thanks. If you know the activity type or minutes, add them here. If not, skip is fine."
-        case .food, .reflection:
+            return "Thanks. Since you were active today, I need the activity type and duration too."
+        case .food:
             return "This part is optional. I won’t guess if you leave it blank."
+        case .reflection:
+            return "One last required question. A short sentence is enough."
         default:
             return "Got it. Let’s keep going."
         }
@@ -237,7 +239,7 @@ struct AICheckInView: View {
         case .food:
             return "e.g., chicken rice and an apple"
         case .reflection:
-            return "Optional reflection..."
+            return "e.g., I felt more tired than usual..."
         }
     }
 
@@ -248,7 +250,7 @@ struct AICheckInView: View {
         case .activity:
             return ["Yes", "No"]
         case .activityDetails:
-            return ["Brisk walking 20 min", "Strength training 20 min", "Skip details"]
+            return ["Brisk walking 20 min", "Strength training 20 min", "Cycling 20 min", "Yoga 20 min"]
         case .movement:
             return [
                 "About once an hour or more",
@@ -260,7 +262,7 @@ struct AICheckInView: View {
         case .food:
             return []
         case .reflection:
-            return ["Finish check-in", "Skip reflection"]
+            return []
         }
     }
 
@@ -401,9 +403,7 @@ struct AICheckInView: View {
                 move(to: .movement)
             }
         case .activityDetails:
-            if option != "Skip details" {
-                applyActivityDetails(option)
-            }
+            applyActivityDetails(option)
             move(to: .movement)
         case .movement:
             store.checkIn.movementBreaks = option
@@ -430,12 +430,18 @@ struct AICheckInView: View {
             move(to: .activity)
         case .activity:
             let lowercased = answer.lowercased()
-            if lowercased.contains("yes") || lowercased.contains("active") || lowercased.contains("walk") || lowercased.contains("run") {
+            if lowercased.contains("yes")
+                || lowercased.contains("active")
+                || lowercased.contains("walk")
+                || lowercased.contains("run")
+                || lowercased.contains("cycle")
+                || lowercased.contains("bike")
+                || lowercased.contains("swim")
+                || lowercased.contains("yoga")
+                || lowercased.contains("strength") {
                 store.checkIn.activeToday = true
-                if lowercased.contains("walk") || lowercased.contains("run") || lowercased.contains("strength") {
-                    applyActivityDetails(answer)
-                }
-                move(to: .activityDetails)
+                applyActivityDetails(answer)
+                move(to: hasRequiredActivityDetails ? .movement : .activityDetails)
             } else if lowercased.contains("no") || lowercased.contains("not") {
                 store.checkIn.activeToday = false
                 move(to: .movement)
@@ -443,8 +449,14 @@ struct AICheckInView: View {
                 showMissing(field: "physical_activity_today", label: "Physical activity")
             }
         case .activityDetails:
-            if !answer.isEmpty {
-                applyActivityDetails(answer)
+            guard !answer.isEmpty else {
+                showMissing(field: "activity_details", label: "Activity type and duration")
+                return
+            }
+            applyActivityDetails(answer)
+            guard hasRequiredActivityDetails else {
+                showMissing(field: "activity_details", label: "Activity type and duration")
+                return
             }
             move(to: .movement)
         case .movement:
@@ -462,9 +474,11 @@ struct AICheckInView: View {
             }
             continueFromFoodJournal()
         case .reflection:
-            if !answer.isEmpty {
-                store.checkIn.dailyReflection = answer
+            guard !answer.isEmpty else {
+                showMissing(field: "daily_reflection", label: "Daily reflection")
+                return
             }
+            store.checkIn.dailyReflection = answer
             completeWithValidation()
         }
     }
@@ -564,9 +578,14 @@ struct AICheckInView: View {
         }
         if store.checkIn.activeToday == nil {
             items.append(MissingDataItem(field: "physical_activity_today", label: "Physical activity", code: MissingDataCode.missing))
+        } else if store.checkIn.activeToday == true && !hasRequiredActivityDetails {
+            items.append(MissingDataItem(field: "activity_details", label: "Activity type and duration", code: MissingDataCode.missing))
         }
         if store.checkIn.movementBreaks.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             items.append(MissingDataItem(field: "movement_breaks", label: "Movement breaks", code: MissingDataCode.missing))
+        }
+        if store.checkIn.dailyReflection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            items.append(MissingDataItem(field: "daily_reflection", label: "Daily reflection", code: MissingDataCode.missing))
         }
         guard items.isEmpty else {
             missingItems = items
@@ -590,6 +609,10 @@ struct AICheckInView: View {
             store.checkIn.activityType = "Swimming"
         } else if lowercased.contains("walk") {
             store.checkIn.activityType = "Brisk walking"
+        } else if lowercased.contains("yoga") || lowercased.contains("stretch") {
+            store.checkIn.activityType = "Yoga or stretching"
+        } else if lowercased.contains("sport") {
+            store.checkIn.activityType = "Sports"
         } else if store.checkIn.activityType.isEmpty {
             store.checkIn.activityType = text
         }
@@ -597,6 +620,11 @@ struct AICheckInView: View {
         if let minutes = firstNumber(in: text) {
             store.checkIn.activityDuration = "\(Int(minutes.rounded()))"
         }
+    }
+
+    private var hasRequiredActivityDetails: Bool {
+        !store.checkIn.activityType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !store.checkIn.activityDuration.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func normalizedMovementAnswer(_ answer: String) -> String {

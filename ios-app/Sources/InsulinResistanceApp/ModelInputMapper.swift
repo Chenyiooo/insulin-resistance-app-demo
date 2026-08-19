@@ -110,14 +110,13 @@ enum ModelInputMapper {
             missingCode: missingCode(for: profile.hypertensionHistory)
         )
 
-        let hypertensionMedication = profile.hypertensionHistory == "Yes" ? profile.antihypertensiveMedication : "No"
         assign(
             &profileInputs,
             key: "hypertension_med",
-            value: yesNoCode(hypertensionMedication),
+            value: yesNoCode(profile.antihypertensiveMedication),
             missing: &missing,
             label: "High blood pressure medication",
-            missingCode: missingCode(for: hypertensionMedication)
+            missingCode: missingCode(for: profile.antihypertensiveMedication)
         )
         assign(
             &profileInputs,

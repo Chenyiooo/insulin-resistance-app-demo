@@ -111,9 +111,13 @@ struct ManualCheckInView: View {
         case 3:
             if store.checkIn.activeToday == nil {
                 items.append(MissingDataItem(field: "physical_activity_today", label: "Physical activity", code: MissingDataCode.missing))
+            } else if store.checkIn.activeToday == true {
+                addRequiredString(&items, field: "activity_type", label: "Activity type", value: store.checkIn.activityType)
+                addRequiredString(&items, field: "activity_duration", label: "Activity duration", value: store.checkIn.activityDuration)
             }
         default:
             addRequiredString(&items, field: "movement_breaks", label: "Movement breaks", value: store.checkIn.movementBreaks)
+            addRequiredString(&items, field: "daily_reflection", label: "Daily reflection", value: store.checkIn.dailyReflection)
         }
         return items
     }
@@ -178,7 +182,7 @@ struct ManualCheckInView: View {
             if step == 1 {
                 Text("These weekly measurements help us update your estimated risk related to insulin resistance and show changes over time.")
             } else {
-                Text("Required questions are marked with an asterisk (*). Your answers help us summarize your day and provide relevant lifestyle suggestions. You can still complete the check-in if you skip optional questions.")
+                Text("Required questions are marked with an asterisk (*). Only blood pressure and food journal are optional.")
             }
         }
         .font(.callout)
@@ -193,10 +197,10 @@ struct ManualCheckInView: View {
             WeeklyMeasurementBadge()
             SectionCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Please enter your current weight if you are able to measure it today.")
+                    Text("Please enter your current weight.")
                         .font(.callout)
                         .foregroundStyle(AppColor.text)
-                    FormField(title: "Weight", text: $store.checkIn.weight, placeholder: "Enter weight")
+                    FormField(title: "Weight *", text: $store.checkIn.weight, placeholder: "Enter weight")
                     Picker("Weight unit", selection: $store.checkIn.weightUnit) {
                         Text("lb").tag("lb")
                         Text("kg").tag("kg")
@@ -206,7 +210,7 @@ struct ManualCheckInView: View {
             }
             SectionCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    FormField(title: "Waist circumference", text: $store.checkIn.waist, placeholder: "Enter waist")
+                    FormField(title: "Waist circumference *", text: $store.checkIn.waist, placeholder: "Enter waist")
                     Picker("Waist unit", selection: $store.checkIn.waistUnit) {
                         Text("in").tag("in")
                         Text("cm").tag("cm")
@@ -255,17 +259,17 @@ struct ManualCheckInView: View {
 
     private var activityStep: some View {
         VStack(spacing: 14) {
-            YesNoCard(title: "Were you physically active today?", value: $store.checkIn.activeToday)
+            YesNoCard(title: "Were you physically active today? *", value: $store.checkIn.activeToday)
             if store.checkIn.activeToday == true {
                 SectionCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Tell us about your activity")
+                        Text("Tell us about your activity *")
                             .font(.headline)
-                        Text("Optional. You can skip these details and still continue.")
+                        Text("If you were active today, activity type and duration are required.")
                             .font(.caption)
                             .foregroundStyle(AppColor.muted)
-                        ActivityTypeMenu(selection: $store.checkIn.activityType)
-                        FormField(title: "Duration (min) (Optional)", text: $store.checkIn.activityDuration, placeholder: "Enter minutes")
+                        ActivityTypeMenu(selection: $store.checkIn.activityType, placeholder: "Activity type *")
+                        FormField(title: "Duration (min) *", text: $store.checkIn.activityDuration, placeholder: "Enter minutes")
                         Text("e.g., brisk walking, cycling, swimming, strength training")
                             .font(.caption)
                             .foregroundStyle(AppColor.muted)
@@ -308,9 +312,9 @@ struct ManualCheckInView: View {
             foodJournalCard
             SectionCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("After entering today's data, what did you notice about how your routines, behaviors, or body may be related to your metabolic health or insulin resistance risk today?")
+                    Text("After entering today's data, what did you notice about how your routines, behaviors, or body may be related to your metabolic health or insulin resistance risk today? *")
                         .font(.headline)
-                    Text("Optional prompts: What stood out to you today? Did anything surprise you? Did you notice any connection among your activity, movement breaks, sleep, food, stress, energy, or symptoms?")
+                    Text("Prompts: What stood out to you today? Did anything surprise you? Did you notice any connection among your activity, movement breaks, sleep, food, stress, energy, or symptoms?")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
                     TextEditor(text: $store.checkIn.dailyReflection)
@@ -589,7 +593,7 @@ struct AdditionalActivityCard: View {
                     }
                     .buttonStyle(.plain)
                 }
-                ActivityTypeMenu(selection: $activity.activityType)
+                ActivityTypeMenu(selection: $activity.activityType, placeholder: "Activity type (Optional)")
                 FormField(title: "Duration (min) (Optional)", text: $activity.duration, placeholder: "Enter minutes")
             }
         }
@@ -598,6 +602,7 @@ struct AdditionalActivityCard: View {
 
 struct ActivityTypeMenu: View {
     @Binding var selection: String
+    let placeholder: String
     private let options = [
         "Brisk walking",
         "Cycling",
@@ -621,7 +626,7 @@ struct ActivityTypeMenu: View {
             }
         } label: {
             HStack {
-                Text(selection.isEmpty ? "Activity type (Optional)" : selection)
+                Text(selection.isEmpty ? placeholder : selection)
                     .foregroundStyle(selection.isEmpty ? Color.gray : AppColor.ink)
                 Spacer()
                 Image(systemName: "chevron.down")

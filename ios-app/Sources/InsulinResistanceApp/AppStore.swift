@@ -534,9 +534,7 @@ final class AppStore: ObservableObject {
         addRequiredString(&items, field: "height_inches", label: "Height inches", value: profile.heightInches)
         addRequiredChoice(&items, field: "family_history_diabetes", label: "Family history of diabetes", value: profile.familyHistoryDiabetes)
         addRequiredChoice(&items, field: "hypertension_history", label: "Hypertension history", value: profile.hypertensionHistory)
-        if profile.hypertensionHistory == "Yes" {
-            addRequiredChoice(&items, field: "antihypertensive_medication", label: "High blood pressure medication", value: profile.antihypertensiveMedication)
-        }
+        addRequiredChoice(&items, field: "antihypertensive_medication", label: "Antihypertensive medication use", value: profile.antihypertensiveMedication)
         addRequiredChoice(&items, field: "high_cholesterol", label: "High cholesterol", value: profile.highCholesterol)
         addRequiredChoice(&items, field: "smoking_status", label: "Smoking status", value: profile.smokingStatus)
         addRequiredChoice(&items, field: "alcohol_frequency", label: "Alcohol frequency", value: profile.alcoholFrequency)
@@ -547,9 +545,7 @@ final class AppStore: ObservableObject {
         var items: [MissingDataItem] = []
         addRequiredString(&items, field: "weight", label: "Weight", value: checkIn.weight)
         addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: checkIn.waist)
-        if !checkIn.hasRecentBloodPressure {
-            items.append(MissingDataItem(field: "blood_pressure", label: "Blood pressure", code: MissingDataCode.noRecentReading))
-        } else {
+        if checkIn.hasRecentBloodPressure {
             addRequiredString(&items, field: "systolic_bp", label: "Systolic blood pressure", value: checkIn.systolic)
             addRequiredString(&items, field: "diastolic_bp", label: "Diastolic blood pressure", value: checkIn.diastolic)
             addRequiredString(&items, field: "blood_pressure_date", label: "Blood pressure date measured", value: checkIn.bloodPressureDate)
@@ -557,8 +553,12 @@ final class AppStore: ObservableObject {
         addRequiredString(&items, field: "sleep_hours", label: "Sleep duration", value: checkIn.sleepHours)
         if checkIn.activeToday == nil {
             items.append(MissingDataItem(field: "physical_activity_today", label: "Physical activity", code: MissingDataCode.missing))
+        } else if checkIn.activeToday == true {
+            addRequiredChoice(&items, field: "activity_type", label: "Activity type", value: checkIn.activityType)
+            addRequiredString(&items, field: "activity_duration", label: "Activity duration", value: checkIn.activityDuration)
         }
         addRequiredChoice(&items, field: "movement_breaks", label: "Movement breaks", value: checkIn.movementBreaks)
+        addRequiredString(&items, field: "daily_reflection", label: "Daily reflection", value: checkIn.dailyReflection)
         return items
     }
 

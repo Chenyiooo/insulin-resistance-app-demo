@@ -137,7 +137,7 @@ struct ProfileSetupView: View {
                 .foregroundStyle(AppColor.ink)
             }
             Divider()
-            Text("Required questions are marked with an asterisk (*). Your answers will be used to generate periodic estimates related to insulin resistance. Optional information may improve the estimate, but you can still complete your profile without providing it.")
+            Text("Required questions are marked with an asterisk (*). The initial profile must be completed before the app can generate periodic estimates related to insulin resistance.")
                 .font(.callout)
                 .foregroundStyle(AppColor.text)
                 .fixedSize(horizontal: false, vertical: true)
@@ -246,13 +246,11 @@ struct ProfileSetupView: View {
                 selection: $store.profile.hypertensionHistory
             )
 
-            if store.profile.hypertensionHistory == "Yes" {
-                SingleSelectQuestion(
-                    title: "8. Are you currently taking medication prescribed for high blood pressure? *",
-                    options: ["Yes", "No", "Not sure", "Prefer not to answer"],
-                    selection: $store.profile.antihypertensiveMedication
-                )
-            }
+            SingleSelectQuestion(
+                title: "8. Are you currently taking medication prescribed for high blood pressure? *",
+                options: ["Yes", "No", "Not sure", "Prefer not to answer"],
+                selection: $store.profile.antihypertensiveMedication
+            )
 
             SingleSelectQuestion(
                 title: "9. Have you ever been told by a health professional that you have high cholesterol? *",
