@@ -91,9 +91,14 @@ final class AppStore: ObservableObject {
     private let dailyInsightsAPI = DailyInsightsAPI()
     private let accountAPI = AccountAPI()
     private var authToken: String?
+    private let weeklyCheckInWeekday = 4
 
     var isSignedIn: Bool {
         authToken != nil
+    }
+
+    var shouldShowWeeklyCheckIn: Bool {
+        Self.isWeeklyCheckInDay(Date(), weekday: weeklyCheckInWeekday)
     }
 
     var canGenerateDailyFeedback: Bool {
@@ -583,12 +588,14 @@ final class AppStore: ObservableObject {
 
     func checkInMissingDataItems() -> [MissingDataItem] {
         var items: [MissingDataItem] = []
-        addRequiredString(&items, field: "weight", label: "Weight", value: checkIn.weight)
-        addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: checkIn.waist)
-        if checkIn.hasRecentBloodPressure {
-            addRequiredString(&items, field: "systolic_bp", label: "Systolic blood pressure", value: checkIn.systolic)
-            addRequiredString(&items, field: "diastolic_bp", label: "Diastolic blood pressure", value: checkIn.diastolic)
-            addRequiredString(&items, field: "blood_pressure_date", label: "Blood pressure date measured", value: checkIn.bloodPressureDate)
+        if shouldShowWeeklyCheckIn {
+            addRequiredString(&items, field: "weight", label: "Weight", value: checkIn.weight)
+            addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: checkIn.waist)
+            if checkIn.hasRecentBloodPressure {
+                addRequiredString(&items, field: "systolic_bp", label: "Systolic blood pressure", value: checkIn.systolic)
+                addRequiredString(&items, field: "diastolic_bp", label: "Diastolic blood pressure", value: checkIn.diastolic)
+                addRequiredString(&items, field: "blood_pressure_date", label: "Blood pressure date measured", value: checkIn.bloodPressureDate)
+            }
         }
         addRequiredString(&items, field: "sleep_hours", label: "Sleep duration", value: checkIn.sleepHours)
         if checkIn.activeToday == nil {
@@ -687,6 +694,10 @@ final class AppStore: ObservableObject {
         default:
             return "sparkles"
         }
+    }
+
+    private static func isWeeklyCheckInDay(_ date: Date, weekday: Int) -> Bool {
+        Calendar.current.component(.weekday, from: date) == weekday
     }
 }
 

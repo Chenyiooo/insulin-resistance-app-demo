@@ -112,6 +112,36 @@ struct AICheckInView: View {
         let trimmedName = store.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedName.isEmpty ? "there" : trimmedName
     }
+    private var firstStep: AIQuestionStep {
+        store.shouldShowWeeklyCheckIn ? .weight : .sleep
+    }
+    private var totalQuestionCount: Int {
+        store.shouldShowWeeklyCheckIn ? 7 : 5
+    }
+    private var progressIndex: Int {
+        switch step {
+        case .weight:
+            return 1
+        case .waist:
+            return 2
+        case .sleep:
+            return store.shouldShowWeeklyCheckIn ? 3 : 1
+        case .activity, .activityDetails:
+            return store.shouldShowWeeklyCheckIn ? 4 : 2
+        case .movement:
+            return store.shouldShowWeeklyCheckIn ? 5 : 3
+        case .food:
+            return store.shouldShowWeeklyCheckIn ? 6 : 4
+        case .reflection:
+            return totalQuestionCount
+        }
+    }
+    private var progressText: String {
+        "\(progressIndex) of \(totalQuestionCount)"
+    }
+    private var progressValue: Double {
+        Double(progressIndex) / Double(totalQuestionCount)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -224,6 +254,11 @@ struct AICheckInView: View {
             Button("Review", role: .cancel) {}
         } message: {
             Text(missingDataMessage)
+        }
+        .onAppear {
+            if !store.shouldShowWeeklyCheckIn && (step == .weight || step == .waist) {
+                step = firstStep
+            }
         }
     }
 
@@ -787,11 +822,11 @@ struct AICheckInView: View {
             HStack {
                 Text("Today's check-in")
                 Spacer()
-                Text(step.progressText)
+                Text(progressText)
             }
             .font(.title3)
             .foregroundStyle(AppColor.text)
-            ProgressView(value: step.progressValue)
+            ProgressView(value: progressValue)
                 .tint(AppColor.blue)
         }
         .padding(24)

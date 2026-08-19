@@ -15,7 +15,15 @@ struct ManualCheckInView: View {
     @State private var isFoodJournalDescriptionVisible = false
     @State private var isShowingActivityPrototypeNote = false
     @State private var additionalActivities: [AdditionalActivityDraft] = []
-    private let totalSteps = 4
+    private var totalSteps: Int {
+        store.shouldShowWeeklyCheckIn ? 4 : 3
+    }
+
+    private var stepLabels: [String] {
+        store.shouldShowWeeklyCheckIn
+            ? ["Weekly", "Sleep", "Activity", "Reflection"]
+            : ["Sleep", "Activity", "Reflection"]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,17 +31,9 @@ struct ManualCheckInView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     topActions
-                    StepIndicator(currentStep: step, labels: ["Weekly", "Sleep", "Activity", "Reflection"])
+                    StepIndicator(currentStep: step, labels: stepLabels)
                     stageIntro
-
-                    Group {
-                        switch step {
-                        case 1: bodyStep
-                        case 2: habitsStep
-                        case 3: activityStep
-                        default: reflectionStep
-                        }
-                    }
+                    currentStepContent
 
                     HStack(spacing: 14) {
                         if step > 1 {
@@ -102,7 +102,7 @@ struct ManualCheckInView: View {
 
     private func currentStepMissingDataItems() -> [MissingDataItem] {
         var items: [MissingDataItem] = []
-        switch step {
+        switch currentStage {
         case 1:
             addRequiredString(&items, field: "weight", label: "Weight", value: store.checkIn.weight)
             addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: store.checkIn.waist)
@@ -125,6 +125,24 @@ struct ManualCheckInView: View {
             addRequiredString(&items, field: "daily_reflection", label: "Daily reflection", value: store.checkIn.dailyReflection)
         }
         return items
+    }
+
+    @ViewBuilder
+    private var currentStepContent: some View {
+        switch currentStage {
+        case 1:
+            bodyStep
+        case 2:
+            habitsStep
+        case 3:
+            activityStep
+        default:
+            reflectionStep
+        }
+    }
+
+    private var currentStage: Int {
+        store.shouldShowWeeklyCheckIn ? step : step + 1
     }
 
     private func addRequiredString(_ items: inout [MissingDataItem], field: String, label: String, value: String) {
@@ -184,7 +202,7 @@ struct ManualCheckInView: View {
 
     private var stageIntro: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if step == 1 {
+            if currentStage == 1 {
                 Text("These weekly measurements help us update your estimated risk related to insulin resistance and show changes over time.")
             } else {
                 Text("Required questions are marked with an asterisk (*). Only blood pressure and food journal are optional.")
