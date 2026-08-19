@@ -20,7 +20,9 @@ struct ProgressDashboardView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    PredictionStatusBanner(mode: store.riskPredictionMode)
+                    if selectedSegment == 0 {
+                        PredictionStatusBanner(mode: store.riskPredictionMode)
+                    }
 
                     if selectedSegment == 0 {
                         DailyInsightsView()
@@ -180,13 +182,67 @@ struct DailyInsightsView: View {
 
 struct WeeklyRiskView: View {
     @EnvironmentObject private var store: AppStore
+    @Query(sort: \StoredDailyCheckIn.checkInDate) private var savedCheckIns: [StoredDailyCheckIn]
     @State private var selectedTrend: WeeklyTrendMetric?
+
+    private var completedDayCount: Int {
+        WeeklyHistorySummary.completedUniqueDayCount(savedCheckIns)
+    }
+
+    private var hasEnoughWeeklyData: Bool {
+        completedDayCount >= 7
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Week of \(Self.weekRangeText())")
                 .font(.headline)
                 .foregroundStyle(AppColor.text)
+
+            if !hasEnoughWeeklyData {
+                weeklyDataEmptyState
+            } else {
+                weeklyRiskContent
+            }
+        }
+        .sheet(item: $selectedTrend) { metric in
+            WeeklyTrendDetailView(metric: metric)
+                .environmentObject(store)
+        }
+    }
+
+    private var weeklyDataEmptyState: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SectionCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("Weekly feedback is not ready yet", systemImage: "calendar.badge.clock")
+                        .font(.title3.bold())
+                        .foregroundStyle(AppColor.text)
+                    Text("You need about one week of completed daily check-ins before weekly feedback, risk estimates, and weekly trend summaries are shown.")
+                        .font(.callout)
+                        .foregroundStyle(AppColor.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(completedDayCount) of 7 completed check-in days saved on this device.")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(AppColor.blue)
+                    Text("For now, no weekly risk estimate is displayed because there is not enough real data.")
+                        .font(.caption)
+                        .foregroundStyle(AppColor.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .background(AppColor.sky)
+
+            Text("Weekly trends will use real saved check-ins only.")
+                .font(.caption)
+                .foregroundStyle(AppColor.muted)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private var weeklyRiskContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            PredictionStatusBanner(mode: store.riskPredictionMode)
 
             SectionCard {
                 VStack(alignment: .leading, spacing: 18) {
@@ -265,10 +321,6 @@ struct WeeklyRiskView: View {
             .background(.white)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
-        }
-        .sheet(item: $selectedTrend) { metric in
-            WeeklyTrendDetailView(metric: metric)
-                .environmentObject(store)
         }
     }
 
@@ -628,7 +680,7 @@ struct WeeklyTrendDetailView: View {
     let metric: WeeklyTrendMetric
 
     private var trendData: TrendData {
-        TrendDataBuilder.make(metric: metric, savedCheckIns: savedCheckIns, currentCheckIn: store.checkIn)
+        TrendDataBuilder.make(metric: metric, savedCheckIns: savedCheckIns)
     }
 
     var body: some View {
@@ -662,16 +714,18 @@ struct WeeklyTrendDetailView: View {
                                     .foregroundStyle(AppColor.muted)
                             }
 
-                            TrendLineChart(points: trendData.points, color: metric.chartColor, unit: metric.unit)
-                                .frame(height: 220)
-
-                            if trendData.isPreview {
-                                Text("Preview trend shown until more saved check-ins are available.")
+                            if trendData.points.count >= 2 {
+                                TrendLineChart(points: trendData.points, color: metric.chartColor, unit: metric.unit)
+                                    .frame(height: 220)
+                                Text("This trend uses saved daily check-ins on this device.")
                                     .font(.caption)
                                     .foregroundStyle(AppColor.muted)
-                                    .fixedSize(horizontal: false, vertical: true)
                             } else {
-                                Text("This trend uses saved daily check-ins on this device.")
+                                Text("Not enough real saved check-ins yet. Complete more daily check-ins to see this trend.")
+                                    .font(.callout)
+                                    .foregroundStyle(AppColor.text)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("\(trendData.points.count) data point\(trendData.points.count == 1 ? "" : "s") available.")
                                     .font(.caption)
                                     .foregroundStyle(AppColor.muted)
                             }
@@ -724,11 +778,21 @@ struct TrendData {
     let currentValueText: String
     let currentCaption: String
     let rangeLabel: String
-    let isPreview: Bool
+}
+
+enum WeeklyHistorySummary {
+    static func completedUniqueDayCount(_ savedCheckIns: [StoredDailyCheckIn]) -> Int {
+        Set(
+            savedCheckIns
+                .filter(\.isCompleted)
+                .map { Calendar.current.startOfDay(for: $0.checkInDate) }
+        )
+        .count
+    }
 }
 
 enum TrendDataBuilder {
-    static func make(metric: WeeklyTrendMetric, savedCheckIns: [StoredDailyCheckIn], currentCheckIn: DailyCheckIn) -> TrendData {
+    static func make(metric: WeeklyTrendMetric, savedCheckIns: [StoredDailyCheckIn]) -> TrendData {
         let calendar = Calendar.current
         let realPoints = savedCheckIns
             .filter(\.isCompleted)
@@ -738,18 +802,8 @@ enum TrendDataBuilder {
                 return TrendPoint(label: weekdayLabel(for: stored.checkInDate), value: value)
             }
 
-        let currentValue = value(for: metric, checkIn: currentCheckIn)
-        let points: [TrendPoint]
-        let isPreview: Bool
-
-        if realPoints.count >= 2 {
-            points = Array(realPoints)
-            isPreview = false
-        } else {
-            points = previewPoints(for: metric, currentValue: currentValue)
-            isPreview = true
-        }
-
+        let points = Array(realPoints)
+        let currentValue = points.last?.value
         let currentText = currentValue.map { formattedValue($0, metric: metric) } ?? "Not logged"
         let caption = currentValueCaption(for: metric, value: currentValue)
         let today = calendar.startOfDay(for: Date())
@@ -759,8 +813,7 @@ enum TrendDataBuilder {
             points: points,
             currentValueText: currentText,
             currentCaption: caption,
-            rangeLabel: "\(shortDate(start))- \(shortDate(today))",
-            isPreview: isPreview
+            rangeLabel: "\(shortDate(start))- \(shortDate(today))"
         )
     }
 
@@ -773,23 +826,6 @@ enum TrendDataBuilder {
         case .movementBreaks:
             return movementScore(checkIn.movementBreaks)
         }
-    }
-
-    private static func previewPoints(for metric: WeeklyTrendMetric, currentValue: Double?) -> [TrendPoint] {
-        let labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Today"]
-        let fallback: [Double]
-        switch metric {
-        case .sleep:
-            let value = currentValue ?? 6.5
-            fallback = [value - 0.6, value - 0.2, value + 0.1, value - 0.4, value + 0.3, value, value + 0.2]
-        case .activity:
-            let value = currentValue ?? 20
-            fallback = [max(0, value - 15), value, max(0, value - 8), value + 10, value + 5, max(0, value - 5), value + 12]
-        case .movementBreaks:
-            let value = currentValue ?? 3
-            fallback = [max(1, value - 1), value, max(1, value - 0.5), min(4, value + 1), value, min(4, value + 0.5), value]
-        }
-        return zip(labels, fallback).map { TrendPoint(label: $0.0, value: max(0, $0.1)) }
     }
 
     private static func formattedValue(_ value: Double, metric: WeeklyTrendMetric) -> String {
