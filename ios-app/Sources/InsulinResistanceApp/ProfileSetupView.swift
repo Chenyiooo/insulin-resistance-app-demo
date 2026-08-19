@@ -152,10 +152,12 @@ struct ProfileSetupView: View {
 
     private var questionFields: some View {
         VStack(alignment: .leading, spacing: 18) {
-            FormField(title: "1. What is your age? *", text: $store.profile.age, placeholder: "Enter your age")
+            FormField(title: "1. What's your name? *", text: $store.profile.name, placeholder: "Enter your name")
+
+            FormField(title: "2. What is your age? *", text: $store.profile.age, placeholder: "Enter your age")
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("2. What sex were you assigned at birth? *")
+                Text("3. What sex were you assigned at birth? *")
                     .font(.headline)
                     .foregroundStyle(AppColor.ink)
                 Menu {
@@ -175,7 +177,7 @@ struct ProfileSetupView: View {
 
             if store.profile.sexAtBirth == "Female" {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("3. Have you ever been pregnant? *")
+                    Text("4. Have you ever been pregnant? *")
                         .font(.headline)
                         .foregroundStyle(AppColor.ink)
                     OptionGrid(options: ["Yes", "No", "Prefer not to answer"], selection: $store.profile.hasBeenPregnant)
@@ -211,7 +213,7 @@ struct ProfileSetupView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("4. How would you describe your race and/or ethnicity? Select all that apply. *")
+                Text("5. How would you describe your race and/or ethnicity? Select all that apply. *")
                     .font(.headline)
                     .foregroundStyle(AppColor.ink)
                 MultiSelectOptions(
@@ -221,7 +223,7 @@ struct ProfileSetupView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("5. What is your height? *")
+                Text("6. What is your height? *")
                     .font(.headline)
                     .foregroundStyle(AppColor.ink)
                 HStack {
@@ -235,37 +237,37 @@ struct ProfileSetupView: View {
             }
 
             SingleSelectQuestion(
-                title: "6. Have any of your close biological relatives, such as a biological parent or sibling, been diagnosed with diabetes? *",
+                title: "7. Have any of your close biological relatives, such as a biological parent or sibling, been diagnosed with diabetes? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.familyHistoryDiabetes
             )
 
             SingleSelectQuestion(
-                title: "7. Have you ever been told by a health professional that you have high blood pressure? *",
+                title: "8. Have you ever been told by a health professional that you have high blood pressure? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.hypertensionHistory
             )
 
             SingleSelectQuestion(
-                title: "8. Are you currently taking medication prescribed for high blood pressure? *",
+                title: "9. Are you currently taking medication prescribed for high blood pressure? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.antihypertensiveMedication
             )
 
             SingleSelectQuestion(
-                title: "9. Have you ever been told by a health professional that you have high cholesterol? *",
+                title: "10. Have you ever been told by a health professional that you have high cholesterol? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.highCholesterol
             )
 
             SingleSelectQuestion(
-                title: "10. Which best describes your current smoking status? *",
+                title: "11. Which best describes your current smoking status? *",
                 options: ["Never smoked", "Formerly smoked", "Currently smoke some days", "Currently smoke every day", "Prefer not to answer"],
                 selection: $store.profile.smokingStatus
             )
 
             SingleSelectQuestion(
-                title: "11. During the past 12 months, how often did you usually drink alcohol? *",
+                title: "12. During the past 12 months, how often did you usually drink alcohol? *",
                 options: ["Never in the past 12 months", "Monthly or less", "2-4 times a month", "2-3 times a week", "4 or more times a week", "Prefer not to answer"],
                 selection: $store.profile.alcoholFrequency
             )

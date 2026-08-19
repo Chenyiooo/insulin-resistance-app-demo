@@ -562,6 +562,7 @@ final class AppStore: ObservableObject {
 
     func profileMissingDataItems() -> [MissingDataItem] {
         var items: [MissingDataItem] = []
+        addRequiredString(&items, field: "name", label: "Name", value: profile.name)
         addRequiredString(&items, field: "age", label: "Age", value: profile.age)
         addRequiredChoice(&items, field: "sex_at_birth", label: "Sex assigned at birth", value: profile.sexAtBirth)
         if profile.sexAtBirth == "Female" {
@@ -719,6 +720,7 @@ struct UserProfile: Codable {
 
     var featureFlags: [String: Int] {
         [
+            "name": answeredFeatureFlag(name),
             "age": answeredFeatureFlag(age),
             "sex_at_birth": answeredFeatureFlag(sexAtBirth),
             "pregnancy_history": answeredFeatureFlag(hasBeenPregnant),
