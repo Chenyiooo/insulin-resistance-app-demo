@@ -4,6 +4,8 @@ import PhotosUI
 import UIKit
 
 private enum AIQuestionStep {
+    case weight
+    case waist
     case sleep
     case activity
     case activityDetails
@@ -13,6 +15,10 @@ private enum AIQuestionStep {
 
     var title: String {
         switch self {
+        case .weight:
+            return "Weight"
+        case .waist:
+            return "Waist circumference"
         case .sleep:
             return "Sleep"
         case .activity:
@@ -30,6 +36,10 @@ private enum AIQuestionStep {
 
     var prompt: String {
         switch self {
+        case .weight:
+            return "What is your current weight?"
+        case .waist:
+            return "What is your waist circumference?"
         case .sleep:
             return "About how many hours did you sleep last night?"
         case .activity:
@@ -47,31 +57,39 @@ private enum AIQuestionStep {
 
     var progressText: String {
         switch self {
+        case .weight:
+            return "1 of 7"
+        case .waist:
+            return "2 of 7"
         case .sleep:
-            return "1 of 5"
+            return "3 of 7"
         case .activity:
-            return "2 of 5"
+            return "4 of 7"
         case .activityDetails:
-            return "2 of 5"
+            return "4 of 7"
         case .movement:
-            return "3 of 5"
+            return "5 of 7"
         case .food:
-            return "4 of 5"
+            return "6 of 7"
         case .reflection:
-            return "5 of 5"
+            return "7 of 7"
         }
     }
 
     var progressValue: Double {
         switch self {
+        case .weight:
+            return 1.0 / 7.0
+        case .waist:
+            return 2.0 / 7.0
         case .sleep:
-            return 0.2
+            return 3.0 / 7.0
         case .activity, .activityDetails:
-            return 0.4
+            return 4.0 / 7.0
         case .movement:
-            return 0.6
+            return 5.0 / 7.0
         case .food:
-            return 0.8
+            return 6.0 / 7.0
         case .reflection:
             return 1.0
         }
@@ -83,13 +101,17 @@ struct AICheckInView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var typedAnswer = ""
     @State private var selectedOption: String?
-    @State private var step: AIQuestionStep = .sleep
+    @State private var step: AIQuestionStep = .weight
     @State private var isShowingHealthImport = false
     @State private var missingItems: [MissingDataItem] = []
     @State private var isShowingMissingDataWarning = false
     @State private var selectedFoodPhotos: [PhotosPickerItem] = []
     @State private var foodPhotoBase64: [String] = []
     @State private var isFoodDescriptionVisible = false
+    private var greetingName: String {
+        let trimmedName = store.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? "there" : trimmedName
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -207,8 +229,12 @@ struct AICheckInView: View {
 
     private var cloudyMessage: String {
         switch step {
+        case .weight:
+            return "Hi \(greetingName)! I’ll ask each required check-in question one at a time."
+        case .waist:
+            return "Thanks. This helps keep today’s check-in complete before feedback is generated."
         case .sleep:
-            return "Hi \(store.profile.name)! I’ll ask each check-in question one at a time."
+            return "Got it. Now let’s check in on last night’s sleep."
         case .activityDetails:
             return "Thanks. Since you were active today, I need the activity type and duration too."
         case .food:
@@ -221,13 +247,17 @@ struct AICheckInView: View {
     }
 
     private var optionHint: String {
-        step == .food || step == .reflection
+        step == .food || step == .reflection || step == .weight || step == .waist
             ? "Choose an option or type your own answer."
             : "Choose an option or tell me in your own words."
     }
 
     private var textPlaceholder: String {
         switch step {
+        case .weight:
+            return "e.g., 165 lb or 75 kg"
+        case .waist:
+            return "e.g., 34 in or 86 cm"
         case .sleep:
             return "e.g., 6.5 hours"
         case .activity:
@@ -245,6 +275,8 @@ struct AICheckInView: View {
 
     private var optionButtons: [String] {
         switch step {
+        case .weight, .waist:
+            return []
         case .sleep:
             return ["5 hr", "6 hr", "7 hr", "8 hr"]
         case .activity:
@@ -389,6 +421,8 @@ struct AICheckInView: View {
     private func choose(_ option: String) {
         selectedOption = option
         switch step {
+        case .weight, .waist:
+            return
         case .sleep:
             store.checkIn.sleepHours = option.replacingOccurrences(of: " hr", with: "")
             move(to: .activity)
@@ -421,6 +455,22 @@ struct AICheckInView: View {
     private func submitTypedAnswer() {
         let answer = typedAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
         switch step {
+        case .weight:
+            guard let weight = firstNumber(in: answer) else {
+                showMissing(field: "weight", label: "Weight")
+                return
+            }
+            store.checkIn.weight = formatNumber(weight)
+            store.checkIn.weightUnit = normalizedWeightUnit(from: answer)
+            move(to: .waist)
+        case .waist:
+            guard let waist = firstNumber(in: answer) else {
+                showMissing(field: "waist_circumference", label: "Waist circumference")
+                return
+            }
+            store.checkIn.waist = formatNumber(waist)
+            store.checkIn.waistUnit = normalizedWaistUnit(from: answer)
+            move(to: .sleep)
         case .sleep:
             guard let hours = firstNumber(in: answer) else {
                 showMissing(field: "sleep_hours", label: "Sleep duration")
@@ -572,21 +622,7 @@ struct AICheckInView: View {
     }
 
     private func completeWithValidation() {
-        var items: [MissingDataItem] = []
-        if store.checkIn.sleepHours.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            items.append(MissingDataItem(field: "sleep_hours", label: "Sleep duration", code: MissingDataCode.missing))
-        }
-        if store.checkIn.activeToday == nil {
-            items.append(MissingDataItem(field: "physical_activity_today", label: "Physical activity", code: MissingDataCode.missing))
-        } else if store.checkIn.activeToday == true && !hasRequiredActivityDetails {
-            items.append(MissingDataItem(field: "activity_details", label: "Activity type and duration", code: MissingDataCode.missing))
-        }
-        if store.checkIn.movementBreaks.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            items.append(MissingDataItem(field: "movement_breaks", label: "Movement breaks", code: MissingDataCode.missing))
-        }
-        if store.checkIn.dailyReflection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            items.append(MissingDataItem(field: "daily_reflection", label: "Daily reflection", code: MissingDataCode.missing))
-        }
+        let items = store.checkInMissingDataItems()
         guard items.isEmpty else {
             missingItems = items
             isShowingMissingDataWarning = true
@@ -661,6 +697,15 @@ struct AICheckInView: View {
 
     private func formatNumber(_ value: Double) -> String {
         value.rounded() == value ? "\(Int(value))" : String(format: "%.1f", value)
+    }
+
+    private func normalizedWeightUnit(from text: String) -> String {
+        text.lowercased().contains("kg") ? "kg" : "lb"
+    }
+
+    private func normalizedWaistUnit(from text: String) -> String {
+        let lowercased = text.lowercased()
+        return lowercased.contains("cm") ? "cm" : "in"
     }
 
     private var topActions: some View {

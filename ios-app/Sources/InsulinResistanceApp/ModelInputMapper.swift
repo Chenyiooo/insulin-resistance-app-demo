@@ -8,6 +8,7 @@ struct ModelInputPayload: Codable {
     let profileInputs: [String: Double]
     let checkInInputs: [String: Double]
     let derivedInputs: [String: Double]
+    let featureFlags: [String: Int]?
     let missingRequiredInputs: [MissingDataItem]
     let omittedOptionalInputs: [String]
     let encodingNotes: [String]
@@ -192,10 +193,22 @@ enum ModelInputMapper {
             profileInputs: profileInputs,
             checkInInputs: checkInInputs,
             derivedInputs: derivedInputs,
+            featureFlags: makeFeatureFlags(profile: profile, checkIn: checkIn),
             missingRequiredInputs: deduplicate(missing).filter { !optionalInputFeatures.contains($0.field) },
             omittedOptionalInputs: Array(Set(omittedOptional)).sorted(),
             encodingNotes: notes
         )
+    }
+
+    private static func makeFeatureFlags(profile: UserProfile, checkIn: DailyCheckIn) -> [String: Int] {
+        var flags: [String: Int] = [:]
+        for (field, value) in profile.featureFlags {
+            flags["profile.\(field)"] = value
+        }
+        for (field, value) in checkIn.featureFlags {
+            flags["check_in.\(field)"] = value
+        }
+        return flags
     }
 
     private static func assign(

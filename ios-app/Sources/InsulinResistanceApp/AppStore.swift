@@ -96,6 +96,21 @@ final class AppStore: ObservableObject {
         authToken != nil
     }
 
+    var canGenerateDailyFeedback: Bool {
+        profileMissingDataItems().isEmpty && checkInMissingDataItems().isEmpty
+    }
+
+    var featureFlags: [String: Int] {
+        var flags: [String: Int] = [:]
+        for (field, value) in profile.featureFlags {
+            flags["profile.\(field)"] = value
+        }
+        for (field, value) in checkIn.featureFlags {
+            flags["check_in.\(field)"] = value
+        }
+        return flags
+    }
+
     init() {
         authToken = KeychainStore.read(account: "authToken")
         accountEmail = UserDefaults.standard.string(forKey: "accountEmail") ?? ""
@@ -118,10 +133,12 @@ final class AppStore: ObservableObject {
     }
 
     func completeCheckIn() {
+        guard canGenerateDailyFeedback else {
+            markFeedbackWaitingForRequiredAnswers()
+            return
+        }
         checkIn.isCompleted = true
-        refreshLocalRiskAndInsights()
-        refreshRemoteDailyInsightsIfPossible()
-        refreshRemoteRiskPredictionIfPossible()
+        refreshFeedbackIfReady()
         screen = .completion
     }
 
@@ -157,8 +174,7 @@ final class AppStore: ObservableObject {
             context.insert(StoredUserProfile(profile: profile, missingItems: missingItems))
         }
         try? context.save()
-        refreshLocalRiskAndInsights()
-        refreshRemoteRiskPredictionIfPossible()
+        refreshFeedbackIfReady()
         syncProfileToCloud()
     }
 
@@ -176,12 +192,14 @@ final class AppStore: ObservableObject {
             context.insert(StoredDailyCheckIn(checkIn: checkIn, missingItems: missingItems))
         }
         try? context.save()
-        refreshLocalRiskAndInsights()
-        refreshRemoteDailyInsightsIfPossible()
-        refreshRemoteRiskPredictionIfPossible()
+        refreshFeedbackIfReady()
     }
 
     func refreshLocalRiskAndInsights() {
+        guard canGenerateDailyFeedback else {
+            markFeedbackWaitingForRequiredAnswers()
+            return
+        }
         let result = LocalRiskEngine.evaluate(profile: profile, checkIn: checkIn)
         weeklyRisk = result.risk
         dailyInsights = result.insights
@@ -189,6 +207,10 @@ final class AppStore: ObservableObject {
     }
 
     func refreshRemoteDailyInsightsIfPossible() {
+        guard canGenerateDailyFeedback else {
+            markFeedbackWaitingForRequiredAnswers()
+            return
+        }
         let currentCheckIn = checkIn
         Task {
             do {
@@ -225,6 +247,10 @@ final class AppStore: ObservableObject {
     }
 
     func refreshRemoteRiskPredictionIfPossible() {
+        guard canGenerateDailyFeedback else {
+            markFeedbackWaitingForRequiredAnswers()
+            return
+        }
         let payload = currentModelInputPayload
         if !payload.missingRequiredInputs.isEmpty {
             riskPredictionMode = .unavailable("Complete required model inputs to use the trained prediction model.")
@@ -243,6 +269,23 @@ final class AppStore: ObservableObject {
                 syncCheckInToCloud()
             }
         }
+    }
+
+    private func refreshFeedbackIfReady() {
+        guard canGenerateDailyFeedback else {
+            markFeedbackWaitingForRequiredAnswers()
+            return
+        }
+        refreshLocalRiskAndInsights()
+        refreshRemoteDailyInsightsIfPossible()
+        refreshRemoteRiskPredictionIfPossible()
+    }
+
+    private func markFeedbackWaitingForRequiredAnswers() {
+        weeklyRisk = MockData.weeklyRiskNotReady
+        dailyInsights = []
+        dailyInsightsSource = "Waiting for required answers"
+        riskPredictionMode = .unavailable("Complete all required profile and check-in answers to generate feedback.")
     }
 
     func estimateFoodNutrition(text: String? = nil, imageBase64: [String] = []) {
@@ -288,8 +331,7 @@ final class AppStore: ObservableObject {
                 checkIn.foodJournal = "Added"
             }
             nutritionEstimateMessage = "Food note saved. Nutrition could not be estimated yet."
-            refreshLocalRiskAndInsights()
-            refreshRemoteDailyInsightsIfPossible()
+            refreshFeedbackIfReady()
             return
         }
         checkIn.foodCalories = "\(result.calories)"
@@ -308,8 +350,7 @@ final class AppStore: ObservableObject {
         } else {
             nutritionEstimateMessage = "AI estimate: \(checkIn.foodJournalSummary)"
         }
-        refreshLocalRiskAndInsights()
-        refreshRemoteDailyInsightsIfPossible()
+        refreshFeedbackIfReady()
     }
 
     private static func formatMacro(_ value: Double) -> String {
@@ -460,8 +501,7 @@ final class AppStore: ObservableObject {
                 checkIn = cloudCheckIn
                 normalizeFoodJournalStatus()
             }
-            refreshLocalRiskAndInsights()
-            refreshRemoteRiskPredictionIfPossible()
+            refreshFeedbackIfReady()
             cloudSyncMessage = "Cloud data loaded."
         } catch {
             cloudSyncMessage = "Could not load cloud data: \(error.localizedDescription)"
@@ -621,9 +661,7 @@ final class AppStore: ObservableObject {
                 checkInProvenance["blood_pressure_measured_at"] = Self.isoDateFormatter.string(from: bloodPressureDate)
             }
         }
-        refreshLocalRiskAndInsights()
-        refreshRemoteDailyInsightsIfPossible()
-        refreshRemoteRiskPredictionIfPossible()
+        refreshFeedbackIfReady()
     }
 
     private static let healthImportDateFormatter: DateFormatter = {
@@ -667,6 +705,24 @@ struct UserProfile: Codable {
     var highCholesterol: String
     var smokingStatus: String
     var alcoholFrequency: String
+
+    var featureFlags: [String: Int] {
+        [
+            "age": answeredFeatureFlag(age),
+            "sex_at_birth": answeredFeatureFlag(sexAtBirth),
+            "pregnancy_history": answeredFeatureFlag(hasBeenPregnant),
+            "gestational_diabetes": answeredFeatureFlag(gestationalDiabetes),
+            "race_ethnicity": raceEthnicity.isEmpty ? 0 : 1,
+            "height_feet": answeredFeatureFlag(heightFeet),
+            "height_inches": answeredFeatureFlag(heightInches),
+            "family_history_diabetes": answeredFeatureFlag(familyHistoryDiabetes),
+            "hypertension_history": answeredFeatureFlag(hypertensionHistory),
+            "antihypertensive_medication": answeredFeatureFlag(antihypertensiveMedication),
+            "high_cholesterol": answeredFeatureFlag(highCholesterol),
+            "smoking_status": answeredFeatureFlag(smokingStatus),
+            "alcohol_frequency": answeredFeatureFlag(alcoholFrequency),
+        ]
+    }
 }
 
 struct DailyCheckIn: Codable {
@@ -696,6 +752,25 @@ struct DailyCheckIn: Codable {
     var foodNutritionMatchedFoods: String
     var dailyReflection: String
     var isCompleted: Bool
+
+    var featureFlags: [String: Int] {
+        [
+            "weight": answeredFeatureFlag(weight),
+            "waist_circumference": answeredFeatureFlag(waist),
+            "blood_pressure": hasRecentBloodPressure && answeredFeatureFlag(systolic) == 1 && answeredFeatureFlag(diastolic) == 1 ? 1 : 0,
+            "blood_pressure_date": answeredFeatureFlag(bloodPressureDate),
+            "sleep_hours": answeredFeatureFlag(sleepHours),
+            "physical_activity_today": activeToday == nil ? 0 : 1,
+            "activity_type": answeredFeatureFlag(activityType),
+            "activity_duration": answeredFeatureFlag(activityDuration),
+            "movement_breaks": answeredFeatureFlag(movementBreaks),
+            "food_journal": answeredFeatureFlag(foodJournal),
+            "food_journal_description": answeredFeatureFlag(foodJournalDescription),
+            "food_photo": foodPhotoCount > 0 ? 1 : 0,
+            "food_nutrition": [foodCalories, foodCarbohydrates, foodProtein, foodFat].contains { answeredFeatureFlag($0) == 1 } ? 1 : 0,
+            "daily_reflection": answeredFeatureFlag(dailyReflection),
+        ]
+    }
 
     var foodJournalSummary: String {
         if foodJournal == "Skipped" {
@@ -848,6 +923,10 @@ struct DailyCheckIn: Codable {
     }
 }
 
+private func answeredFeatureFlag(_ value: String) -> Int {
+    value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : 1
+}
+
 struct WeeklyRisk: Codable {
     var score: Int
     var band: String
@@ -857,20 +936,20 @@ struct WeeklyRisk: Codable {
 
 enum MockData {
     static let profile = UserProfile(
-        name: "Chenyi",
-        age: "34",
-        sexAtBirth: "Female",
-        hasBeenPregnant: "Yes",
-        gestationalDiabetes: "No",
-        raceEthnicity: ["Non-Hispanic Asian"],
-        heightFeet: "5",
-        heightInches: "6",
-        familyHistoryDiabetes: "Yes",
-        hypertensionHistory: "No",
-        antihypertensiveMedication: "No",
-        highCholesterol: "No",
-        smokingStatus: "Never smoked",
-        alcoholFrequency: "Never in the past 12 months"
+        name: "",
+        age: "",
+        sexAtBirth: "",
+        hasBeenPregnant: "",
+        gestationalDiabetes: "",
+        raceEthnicity: [],
+        heightFeet: "",
+        heightInches: "",
+        familyHistoryDiabetes: "",
+        hypertensionHistory: "",
+        antihypertensiveMedication: "",
+        highCholesterol: "",
+        smokingStatus: "",
+        alcoholFrequency: ""
     )
 
     static let checkIn = DailyCheckIn(
@@ -902,28 +981,14 @@ enum MockData {
         isCompleted: false
     )
 
-    static let weeklyRisk = WeeklyRisk(
-        score: 64,
-        band: "High Risk",
-        increasing: ["Waist circumference", "BMI", "High blood pressure history"],
-        decreasing: ["Younger age", "Typical sleep duration"]
+    static let weeklyRiskNotReady = WeeklyRisk(
+        score: 0,
+        band: "Not Ready",
+        increasing: [],
+        decreasing: []
     )
 
-    static let dailyInsights = [
-        DailyInsight(
-            icon: "figure.walk",
-            title: "Physical activity",
-            detail: "A 10-minute walk after your next meal could add a little more movement."
-        ),
-        DailyInsight(
-            icon: "figure.stand",
-            title: "Movement breaks",
-            detail: "Try standing or walking for 2-3 minutes during your next hour of sitting."
-        ),
-        DailyInsight(
-            icon: "fork.knife",
-            title: "Food journal",
-            detail: "Review today's meals and notice anything that stood out."
-        )
-    ]
+    static let weeklyRisk = weeklyRiskNotReady
+
+    static let dailyInsights: [DailyInsight] = []
 }

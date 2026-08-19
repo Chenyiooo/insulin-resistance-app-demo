@@ -83,6 +83,11 @@ struct ManualCheckInView: View {
         missingItems = currentStepMissingDataItems()
         if missingItems.isEmpty {
             if step == totalSteps {
+                missingItems = store.checkInMissingDataItems()
+                guard missingItems.isEmpty else {
+                    isShowingMissingDataWarning = true
+                    return
+                }
                 store.checkIn.isCompleted = true
                 store.saveCheckIn(in: modelContext)
                 store.screen = .completion

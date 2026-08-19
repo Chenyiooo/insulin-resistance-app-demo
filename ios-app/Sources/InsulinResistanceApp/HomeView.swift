@@ -3,13 +3,17 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var store: AppStore
     @State private var knowledgeItem = InsulinKnowledgeLibrary.randomItem()
+    private var greetingName: String {
+        let trimmedName = store.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? "there" : trimmedName
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Good evening, \(store.profile.name)!")
+                        Text("Good evening, \(greetingName)!")
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(AppColor.ink)
                         Text("Small check-ins can help you notice patterns over time.")
