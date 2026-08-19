@@ -3,12 +3,17 @@ import SwiftData
 import PhotosUI
 import UIKit
 
-private enum AIQuestionStep {
+private enum AIQuestionStep: Hashable {
     case weight
     case waist
+    case bloodPressureChoice
+    case bloodPressureSystolic
+    case bloodPressureDiastolic
+    case bloodPressureDate
     case sleep
     case activity
-    case activityDetails
+    case activityType
+    case activityDuration
     case movement
     case food
     case reflection
@@ -19,12 +24,16 @@ private enum AIQuestionStep {
             return "Weight"
         case .waist:
             return "Waist circumference"
+        case .bloodPressureChoice, .bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate:
+            return "Blood pressure (Optional)"
         case .sleep:
             return "Sleep"
         case .activity:
             return "Physical activity"
-        case .activityDetails:
-            return "Activity details"
+        case .activityType:
+            return "Activity type"
+        case .activityDuration:
+            return "Activity duration"
         case .movement:
             return "Movement breaks"
         case .food:
@@ -37,61 +46,31 @@ private enum AIQuestionStep {
     var prompt: String {
         switch self {
         case .weight:
-            return "What is your current weight?"
+            return "Please enter your current weight."
         case .waist:
-            return "What is your waist circumference?"
+            return "Please enter your waist circumference."
+        case .bloodPressureChoice:
+            return "If you measured your blood pressure recently, enter the reading below."
+        case .bloodPressureSystolic:
+            return "What was the systolic blood pressure number?"
+        case .bloodPressureDiastolic:
+            return "What was the diastolic blood pressure number?"
+        case .bloodPressureDate:
+            return "When was this blood pressure reading measured?"
         case .sleep:
-            return "About how many hours did you sleep last night?"
+            return "About how many hours did you sleep last night? *"
         case .activity:
-            return "Were you physically active today?"
-        case .activityDetails:
-            return "Tell me what kind of activity you did and about how long it lasted."
+            return "Were you physically active today? *"
+        case .activityType:
+            return "Tell us about your activity. What type of activity did you do? *"
+        case .activityDuration:
+            return "How many minutes did that activity last? *"
         case .movement:
-            return "During sitting periods today, how often did you get up and move for at least 2-3 minutes?"
+            return "During periods when you were sitting, how often did you stand up or walk for at least 2-3 minutes today? *"
         case .food:
-            return "Would you like to add a food journal for today? This is optional."
+            return "Would you like to add a food journal for today? (Optional)"
         case .reflection:
-            return "What did you notice about sleep, movement, food, energy, stress, or your routine today?"
-        }
-    }
-
-    var progressText: String {
-        switch self {
-        case .weight:
-            return "1 of 7"
-        case .waist:
-            return "2 of 7"
-        case .sleep:
-            return "3 of 7"
-        case .activity:
-            return "4 of 7"
-        case .activityDetails:
-            return "4 of 7"
-        case .movement:
-            return "5 of 7"
-        case .food:
-            return "6 of 7"
-        case .reflection:
-            return "7 of 7"
-        }
-    }
-
-    var progressValue: Double {
-        switch self {
-        case .weight:
-            return 1.0 / 7.0
-        case .waist:
-            return 2.0 / 7.0
-        case .sleep:
-            return 3.0 / 7.0
-        case .activity, .activityDetails:
-            return 4.0 / 7.0
-        case .movement:
-            return 5.0 / 7.0
-        case .food:
-            return 6.0 / 7.0
-        case .reflection:
-            return 1.0
+            return "After entering today's data, what did you notice about how your routines, behaviors, or body may be related to your metabolic health or insulin resistance risk today? *"
         }
     }
 }
@@ -113,28 +92,28 @@ struct AICheckInView: View {
         return trimmedName.isEmpty ? "there" : trimmedName
     }
     private var firstStep: AIQuestionStep {
-        store.shouldShowWeeklyCheckIn ? .weight : .sleep
+        orderedSteps.first ?? .sleep
+    }
+    private var orderedSteps: [AIQuestionStep] {
+        var steps: [AIQuestionStep] = []
+        if store.shouldShowWeeklyCheckIn {
+            steps += [.weight, .waist, .bloodPressureChoice]
+            if store.checkIn.hasRecentBloodPressure {
+                steps += [.bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate]
+            }
+        }
+        steps += [.sleep, .activity]
+        if store.checkIn.activeToday == true {
+            steps += [.activityType, .activityDuration]
+        }
+        steps += [.movement, .food, .reflection]
+        return steps
     }
     private var totalQuestionCount: Int {
-        store.shouldShowWeeklyCheckIn ? 7 : 5
+        orderedSteps.count
     }
     private var progressIndex: Int {
-        switch step {
-        case .weight:
-            return 1
-        case .waist:
-            return 2
-        case .sleep:
-            return store.shouldShowWeeklyCheckIn ? 3 : 1
-        case .activity, .activityDetails:
-            return store.shouldShowWeeklyCheckIn ? 4 : 2
-        case .movement:
-            return store.shouldShowWeeklyCheckIn ? 5 : 3
-        case .food:
-            return store.shouldShowWeeklyCheckIn ? 6 : 4
-        case .reflection:
-            return totalQuestionCount
-        }
+        (orderedSteps.firstIndex(of: step) ?? 0) + 1
     }
     private var progressText: String {
         "\(progressIndex) of \(totalQuestionCount)"
@@ -256,7 +235,7 @@ struct AICheckInView: View {
             Text(missingDataMessage)
         }
         .onAppear {
-            if !store.shouldShowWeeklyCheckIn && (step == .weight || step == .waist) {
+            if !orderedSteps.contains(step) {
                 step = firstStep
             }
         }
@@ -268,10 +247,14 @@ struct AICheckInView: View {
             return "Hi \(greetingName)! I’ll ask each required check-in question one at a time."
         case .waist:
             return "Thanks. This helps keep today’s check-in complete before feedback is generated."
+        case .bloodPressureChoice:
+            return "Blood pressure is optional. If you do not have a recent reading, we’ll skip it."
+        case .bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate:
+            return "Since you said you have a recent reading, I’ll collect the same details as the manual form."
         case .sleep:
             return "Got it. Now let’s check in on last night’s sleep."
-        case .activityDetails:
-            return "Thanks. Since you were active today, I need the activity type and duration too."
+        case .activityType, .activityDuration:
+            return "Thanks. Since you were active today, activity type and duration are required."
         case .food:
             return "This part is optional. I won’t guess if you leave it blank."
         case .reflection:
@@ -282,7 +265,7 @@ struct AICheckInView: View {
     }
 
     private var optionHint: String {
-        step == .food || step == .reflection || step == .weight || step == .waist
+        step == .food || step == .reflection || step == .weight || step == .waist || step == .bloodPressureDate
             ? "Choose an option or type your own answer."
             : "Choose an option or tell me in your own words."
     }
@@ -293,12 +276,22 @@ struct AICheckInView: View {
             return "e.g., 165 lb or 75 kg"
         case .waist:
             return "e.g., 34 in or 86 cm"
+        case .bloodPressureChoice:
+            return "e.g., yes or no"
+        case .bloodPressureSystolic:
+            return "e.g., 120"
+        case .bloodPressureDiastolic:
+            return "e.g., 80"
+        case .bloodPressureDate:
+            return "e.g., Today"
         case .sleep:
             return "e.g., 6.5 hours"
         case .activity:
             return "e.g., yes or no"
-        case .activityDetails:
-            return "e.g., brisk walking for 20 minutes"
+        case .activityType:
+            return "e.g., brisk walking"
+        case .activityDuration:
+            return "e.g., 20"
         case .movement:
             return "Type your answer..."
         case .food:
@@ -310,14 +303,18 @@ struct AICheckInView: View {
 
     private var optionButtons: [String] {
         switch step {
-        case .weight, .waist:
+        case .weight, .waist, .bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate:
             return []
+        case .bloodPressureChoice:
+            return ["I have a recent reading", "I don't have a recent reading"]
         case .sleep:
             return ["5 hr", "6 hr", "7 hr", "8 hr"]
         case .activity:
             return ["Yes", "No"]
-        case .activityDetails:
-            return ["Brisk walking 20 min", "Strength training 20 min", "Cycling 20 min", "Yoga 20 min"]
+        case .activityType:
+            return ["Brisk walking", "Cycling", "Swimming", "Strength training", "Running", "Yoga or stretching", "Sports", "Other activity"]
+        case .activityDuration:
+            return ["10 min", "20 min", "30 min", "45 min"]
         case .movement:
             return [
                 "About once an hour or more",
@@ -458,30 +455,44 @@ struct AICheckInView: View {
         switch step {
         case .weight, .waist:
             return
+        case .bloodPressureChoice:
+            if option == "I have a recent reading" {
+                store.checkIn.hasRecentBloodPressure = true
+            } else {
+                store.checkIn.hasRecentBloodPressure = false
+                store.checkIn.systolic = ""
+                store.checkIn.diastolic = ""
+                store.checkIn.bloodPressureDate = ""
+            }
+            moveToNextStep()
+        case .bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate:
+            return
         case .sleep:
             store.checkIn.sleepHours = option.replacingOccurrences(of: " hr", with: "")
-            move(to: .activity)
+            moveToNextStep()
         case .activity:
             if option == "Yes" {
                 store.checkIn.activeToday = true
-                move(to: .activityDetails)
             } else {
                 store.checkIn.activeToday = false
                 store.checkIn.activityType = ""
                 store.checkIn.activityDuration = ""
-                move(to: .movement)
             }
-        case .activityDetails:
-            applyActivityDetails(option)
-            move(to: .movement)
+            moveToNextStep()
+        case .activityType:
+            store.checkIn.activityType = option
+            moveToNextStep()
+        case .activityDuration:
+            store.checkIn.activityDuration = option.replacingOccurrences(of: " min", with: "")
+            moveToNextStep()
         case .movement:
             store.checkIn.movementBreaks = option
-            move(to: .food)
+            moveToNextStep()
         case .food:
             if option == "Skip food journal" {
                 store.checkIn.foodJournal = "Skipped"
             }
-            move(to: .reflection)
+            moveToNextStep()
         case .reflection:
             completeWithValidation()
         }
@@ -497,7 +508,7 @@ struct AICheckInView: View {
             }
             store.checkIn.weight = formatNumber(weight)
             store.checkIn.weightUnit = normalizedWeightUnit(from: answer)
-            move(to: .waist)
+            moveToNextStep()
         case .waist:
             guard let waist = firstNumber(in: answer) else {
                 showMissing(field: "waist_circumference", label: "Waist circumference")
@@ -505,52 +516,79 @@ struct AICheckInView: View {
             }
             store.checkIn.waist = formatNumber(waist)
             store.checkIn.waistUnit = normalizedWaistUnit(from: answer)
-            move(to: .sleep)
+            moveToNextStep()
+        case .bloodPressureChoice:
+            let lowercased = answer.lowercased()
+            if lowercased.contains("yes") || lowercased.contains("have") || lowercased.contains("recent") {
+                store.checkIn.hasRecentBloodPressure = true
+                moveToNextStep()
+            } else if lowercased.contains("no") || lowercased.contains("don't") || lowercased.contains("do not") || lowercased.contains("none") {
+                store.checkIn.hasRecentBloodPressure = false
+                store.checkIn.systolic = ""
+                store.checkIn.diastolic = ""
+                store.checkIn.bloodPressureDate = ""
+                moveToNextStep()
+            } else {
+                showMissing(field: "blood_pressure_optional_choice", label: "Blood pressure optional choice")
+            }
+        case .bloodPressureSystolic:
+            guard let systolic = firstNumber(in: answer) else {
+                showMissing(field: "systolic_bp", label: "Systolic blood pressure")
+                return
+            }
+            store.checkIn.systolic = formatNumber(systolic)
+            moveToNextStep()
+        case .bloodPressureDiastolic:
+            guard let diastolic = firstNumber(in: answer) else {
+                showMissing(field: "diastolic_bp", label: "Diastolic blood pressure")
+                return
+            }
+            store.checkIn.diastolic = formatNumber(diastolic)
+            moveToNextStep()
+        case .bloodPressureDate:
+            store.checkIn.bloodPressureDate = answer.isEmpty ? "Today" : answer
+            moveToNextStep()
         case .sleep:
             guard let hours = firstNumber(in: answer) else {
                 showMissing(field: "sleep_hours", label: "Sleep duration")
                 return
             }
             store.checkIn.sleepHours = formatNumber(hours)
-            move(to: .activity)
+            moveToNextStep()
         case .activity:
             let lowercased = answer.lowercased()
-            if lowercased.contains("yes")
-                || lowercased.contains("active")
-                || lowercased.contains("walk")
-                || lowercased.contains("run")
-                || lowercased.contains("cycle")
-                || lowercased.contains("bike")
-                || lowercased.contains("swim")
-                || lowercased.contains("yoga")
-                || lowercased.contains("strength") {
+            if lowercased.contains("yes") || lowercased.contains("active") {
                 store.checkIn.activeToday = true
-                applyActivityDetails(answer)
-                move(to: hasRequiredActivityDetails ? .movement : .activityDetails)
+                moveToNextStep()
             } else if lowercased.contains("no") || lowercased.contains("not") {
                 store.checkIn.activeToday = false
-                move(to: .movement)
+                store.checkIn.activityType = ""
+                store.checkIn.activityDuration = ""
+                moveToNextStep()
             } else {
                 showMissing(field: "physical_activity_today", label: "Physical activity")
             }
-        case .activityDetails:
+        case .activityType:
             guard !answer.isEmpty else {
-                showMissing(field: "activity_details", label: "Activity type and duration")
+                showMissing(field: "activity_type", label: "Activity type")
                 return
             }
-            applyActivityDetails(answer)
-            guard hasRequiredActivityDetails else {
-                showMissing(field: "activity_details", label: "Activity type and duration")
+            store.checkIn.activityType = normalizedActivityType(answer)
+            moveToNextStep()
+        case .activityDuration:
+            guard let minutes = firstNumber(in: answer) else {
+                showMissing(field: "activity_duration", label: "Activity duration")
                 return
             }
-            move(to: .movement)
+            store.checkIn.activityDuration = "\(Int(minutes.rounded()))"
+            moveToNextStep()
         case .movement:
             guard !answer.isEmpty else {
                 showMissing(field: "movement_breaks", label: "Movement breaks")
                 return
             }
             store.checkIn.movementBreaks = normalizedMovementAnswer(answer)
-            move(to: .food)
+            moveToNextStep()
         case .food:
             if !answer.isEmpty {
                 store.checkIn.foodJournal = "Added"
@@ -590,7 +628,7 @@ struct AICheckInView: View {
             store.checkIn.foodJournal = "Added"
             store.estimateFoodNutrition(text: description, imageBase64: foodPhotoBase64)
         }
-        move(to: .reflection)
+        moveToNextStep()
     }
 
     private func continueFromFoodJournal() {
@@ -603,7 +641,7 @@ struct AICheckInView: View {
         } else if store.checkIn.foodJournal != "Skipped" {
             store.checkIn.foodJournal = ""
         }
-        move(to: .reflection)
+        moveToNextStep()
     }
 
     private func skipFoodJournal() {
@@ -622,7 +660,7 @@ struct AICheckInView: View {
         store.checkIn.foodNutritionMatchedFoods = ""
         store.nutritionEstimateMessage = ""
         store.checkIn.foodJournal = "Skipped"
-        move(to: .reflection)
+        moveToNextStep()
     }
 
     private func loadJPEGBase64(from items: [PhotosPickerItem]) async -> [String] {
@@ -649,6 +687,19 @@ struct AICheckInView: View {
         store.saveCheckIn(in: modelContext)
     }
 
+    private func moveToNextStep() {
+        guard let currentIndex = orderedSteps.firstIndex(of: step) else {
+            move(to: firstStep)
+            return
+        }
+        let nextIndex = orderedSteps.index(after: currentIndex)
+        guard orderedSteps.indices.contains(nextIndex) else {
+            completeWithValidation()
+            return
+        }
+        move(to: orderedSteps[nextIndex])
+    }
+
     private func showMissing(field: String, label: String) {
         missingItems = [
             MissingDataItem(field: field, label: label, code: MissingDataCode.missing)
@@ -668,34 +719,30 @@ struct AICheckInView: View {
         store.screen = .completion
     }
 
-    private func applyActivityDetails(_ text: String) {
+    private func normalizedActivityType(_ text: String) -> String {
         let lowercased = text.lowercased()
         if lowercased.contains("strength") || lowercased.contains("weight") {
-            store.checkIn.activityType = "Strength training"
-        } else if lowercased.contains("run") {
-            store.checkIn.activityType = "Running"
-        } else if lowercased.contains("cycle") || lowercased.contains("bike") {
-            store.checkIn.activityType = "Cycling"
-        } else if lowercased.contains("swim") {
-            store.checkIn.activityType = "Swimming"
-        } else if lowercased.contains("walk") {
-            store.checkIn.activityType = "Brisk walking"
-        } else if lowercased.contains("yoga") || lowercased.contains("stretch") {
-            store.checkIn.activityType = "Yoga or stretching"
-        } else if lowercased.contains("sport") {
-            store.checkIn.activityType = "Sports"
-        } else if store.checkIn.activityType.isEmpty {
-            store.checkIn.activityType = text
+            return "Strength training"
         }
-
-        if let minutes = firstNumber(in: text) {
-            store.checkIn.activityDuration = "\(Int(minutes.rounded()))"
+        if lowercased.contains("run") {
+            return "Running"
         }
-    }
-
-    private var hasRequiredActivityDetails: Bool {
-        !store.checkIn.activityType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !store.checkIn.activityDuration.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if lowercased.contains("cycle") || lowercased.contains("bike") {
+            return "Cycling"
+        }
+        if lowercased.contains("swim") {
+            return "Swimming"
+        }
+        if lowercased.contains("walk") {
+            return "Brisk walking"
+        }
+        if lowercased.contains("yoga") || lowercased.contains("stretch") {
+            return "Yoga or stretching"
+        }
+        if lowercased.contains("sport") {
+            return "Sports"
+        }
+        return text
     }
 
     private func normalizedMovementAnswer(_ answer: String) -> String {
