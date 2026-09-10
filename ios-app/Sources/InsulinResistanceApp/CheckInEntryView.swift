@@ -35,7 +35,7 @@ struct CheckInEntryView: View {
                         MethodCard(
                             icon: "bubble.left.and.bubble.right",
                             title: "Talk to Cloudy",
-                            subtitle: "Share by text or voice",
+                            subtitle: "Share by text",
                             badge: "Conversational",
                             isHighlighted: true
                         ) {

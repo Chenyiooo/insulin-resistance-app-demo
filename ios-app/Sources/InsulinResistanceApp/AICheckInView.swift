@@ -194,12 +194,6 @@ struct AICheckInView: View {
             HStack(spacing: 14) {
                 TextField(textPlaceholder, text: $typedAnswer)
                     .textFieldStyle(AppTextFieldStyle())
-                    .overlay(alignment: .trailing) {
-                        Image(systemName: "mic")
-                            .font(.title2)
-                            .foregroundStyle(AppColor.muted)
-                            .padding(.trailing, 16)
-                    }
                 Button {
                     submitTypedAnswer()
                 } label: {
