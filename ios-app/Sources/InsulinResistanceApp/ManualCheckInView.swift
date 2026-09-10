@@ -421,7 +421,7 @@ struct ManualCheckInView: View {
                     Text("Estimated nutrition summary")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AppColor.text)
-                    Text("Optional. Enter an estimate if you know it, or leave blank for later AI/database analysis.")
+                    Text("Optional. Enter an estimate if you know it, or use USDA FoodData Central estimation from your food description or photo.")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
 
@@ -513,7 +513,7 @@ struct ManualCheckInView: View {
             } else if store.checkIn.foodPhotoCount > 0 {
                 Image(systemName: "photo")
                     .foregroundStyle(AppColor.blue)
-                Text("Photo selected. Nutrition will be estimated automatically when the backend is available, or with a low-confidence local fallback.")
+                Text("Photo selected. Nutrition will be estimated through the backend using USDA FoodData Central when available.")
             } else {
                 Image(systemName: "sparkles")
                     .foregroundStyle(AppColor.blue)

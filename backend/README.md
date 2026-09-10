@@ -82,7 +82,7 @@ The response includes:
 
 ### `POST /nutrition/estimate`
 
-Estimates calories and macronutrients from a typed food description, uploaded food photos, or both:
+Estimates calories and macronutrients from a typed food description, uploaded food photos, or both. The endpoint parses food items and portion cues, then calculates nutrition values from USDA FoodData Central matches:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/nutrition/estimate \
@@ -93,9 +93,9 @@ curl -X POST http://127.0.0.1:8000/nutrition/estimate \
   }'
 ```
 
-The response includes estimated `calories`, `carbohydrates`, `protein`, `fat`, detected or matched foods, confidence, explanation, and a disclaimer.
+The response includes estimated `calories`, `carbohydrates`, `protein`, `fat`, matched USDA foods, confidence, explanation, and a disclaimer.
 
-If `OPENAI_API_KEY` is configured, the endpoint uses a vision/language model for photo and text estimation:
+If `OPENAI_API_KEY` is configured, the endpoint uses a vision/language model only to identify foods and approximate portions from photos. Nutrient values are still calculated from USDA FoodData Central records:
 
 ```bash
 export OPENAI_API_KEY="..."
@@ -103,11 +103,11 @@ export OPENAI_NUTRITION_MODEL="gpt-4o-mini"
 export OPENAI_NUTRITION_IMAGE_DETAIL="high"
 ```
 
-On Render, set `OPENAI_API_KEY` in **Environment** as a secret value. Do not commit the key to GitHub. `OPENAI_NUTRITION_MODEL` and `OPENAI_NUTRITION_IMAGE_DETAIL` can stay in `render.yaml`.
+Set `USDA_FDC_API_KEY` to a FoodData Central API key for production use. Without it, the endpoint uses USDA's limited `DEMO_KEY`, which is suitable only for development checks. On Render, set `OPENAI_API_KEY` and `USDA_FDC_API_KEY` in **Environment** as secret values. Do not commit keys to GitHub. `OPENAI_NUTRITION_MODEL` and `OPENAI_NUTRITION_IMAGE_DETAIL` can stay in `render.yaml`.
 
-Use `GET /nutrition/status` to confirm the backend can see the OpenAI configuration. It reports only non-secret diagnostics such as whether a key is configured, the selected model, and the last request status.
+Use `GET /nutrition/status` to confirm the backend can see the OpenAI and USDA configuration. It reports only non-secret diagnostics such as whether keys are configured, the selected model, USDA data types, and last request status.
 
-Without an API key, typed descriptions fall back to local common-serving nutrition rules. Photo-only inputs return a low-confidence generic meal estimate so the app remains usable during development. Nutrition values are estimates for reflection only, not medical or dietary advice.
+If USDA FoodData Central cannot be reached or no reliable food match is found, the endpoint returns `source: "unable_to_estimate"` and does not invent nutrition values. Nutrition values are estimates for reflection only, not medical or dietary advice.
 
 ### `POST /insights/daily`
 

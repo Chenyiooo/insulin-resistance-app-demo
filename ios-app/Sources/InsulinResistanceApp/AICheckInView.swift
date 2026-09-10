@@ -121,6 +121,12 @@ struct AICheckInView: View {
     private var progressValue: Double {
         Double(progressIndex) / Double(totalQuestionCount)
     }
+    private var canMoveBack: Bool {
+        guard let currentIndex = orderedSteps.firstIndex(of: step) else {
+            return false
+        }
+        return currentIndex > orderedSteps.startIndex
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -192,6 +198,18 @@ struct AICheckInView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack(spacing: 14) {
+                if canMoveBack {
+                    Button {
+                        moveToPreviousStep()
+                    } label: {
+                        Label("Back", systemImage: "chevron.left")
+                            .font(.headline)
+                            .foregroundStyle(AppColor.blue)
+                            .frame(width: 92, height: 56)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.blue, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                }
                 TextField(textPlaceholder, text: $typedAnswer)
                     .textFieldStyle(AppTextFieldStyle())
                 Button {
@@ -675,9 +693,9 @@ struct AICheckInView: View {
     }
 
     private func move(to nextStep: AIQuestionStep) {
-        typedAnswer = ""
-        selectedOption = nil
         step = nextStep
+        typedAnswer = savedAnswerText(for: nextStep)
+        selectedOption = savedOption(for: nextStep)
         store.saveCheckIn(in: modelContext)
     }
 
@@ -692,6 +710,74 @@ struct AICheckInView: View {
             return
         }
         move(to: orderedSteps[nextIndex])
+    }
+
+    private func moveToPreviousStep() {
+        guard let currentIndex = orderedSteps.firstIndex(of: step), currentIndex > orderedSteps.startIndex else {
+            return
+        }
+        let previousIndex = orderedSteps.index(before: currentIndex)
+        move(to: orderedSteps[previousIndex])
+    }
+
+    private func savedAnswerText(for targetStep: AIQuestionStep) -> String {
+        switch targetStep {
+        case .weight:
+            return formattedMeasurement(value: store.checkIn.weight, unit: store.checkIn.weightUnit)
+        case .waist:
+            return formattedMeasurement(value: store.checkIn.waist, unit: store.checkIn.waistUnit)
+        case .bloodPressureChoice:
+            if store.checkIn.hasRecentBloodPressure { return "Yes" }
+            return ""
+        case .bloodPressureSystolic:
+            return store.checkIn.systolic
+        case .bloodPressureDiastolic:
+            return store.checkIn.diastolic
+        case .bloodPressureDate:
+            return store.checkIn.bloodPressureDate
+        case .sleep:
+            return store.checkIn.sleepHours
+        case .activity:
+            guard let activeToday = store.checkIn.activeToday else { return "" }
+            return activeToday ? "Yes" : "No"
+        case .activityType:
+            return store.checkIn.activityType
+        case .activityDuration:
+            return store.checkIn.activityDuration
+        case .movement:
+            return store.checkIn.movementBreaks
+        case .food:
+            return store.checkIn.foodJournalDescription
+        case .reflection:
+            return store.checkIn.dailyReflection
+        }
+    }
+
+    private func savedOption(for targetStep: AIQuestionStep) -> String? {
+        switch targetStep {
+        case .bloodPressureChoice:
+            return store.checkIn.hasRecentBloodPressure ? "I have a recent reading" : nil
+        case .sleep:
+            return optionButtons.contains("\(store.checkIn.sleepHours) hr") ? "\(store.checkIn.sleepHours) hr" : nil
+        case .activity:
+            guard let activeToday = store.checkIn.activeToday else { return nil }
+            return activeToday ? "Yes" : "No"
+        case .activityType:
+            return optionButtons.contains(store.checkIn.activityType) ? store.checkIn.activityType : nil
+        case .activityDuration:
+            return optionButtons.contains("\(store.checkIn.activityDuration) min") ? "\(store.checkIn.activityDuration) min" : nil
+        case .movement:
+            return optionButtons.contains(store.checkIn.movementBreaks) ? store.checkIn.movementBreaks : nil
+        default:
+            return nil
+        }
+    }
+
+    private func formattedMeasurement(value: String, unit: String) -> String {
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ""
+        }
+        return "\(value) \(unit)"
     }
 
     private func showMissing(field: String, label: String) {

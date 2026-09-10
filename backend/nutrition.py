@@ -6,8 +6,10 @@ import logging
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Any
 
 
@@ -15,89 +17,66 @@ logger = logging.getLogger(__name__)
 
 DISCLAIMER = (
     "Nutrition values are estimates for reflection only, not medical or dietary advice. "
-    "Accuracy depends on food identification, portion size, recipe, and preparation method."
+    "Values are calculated from USDA FoodData Central matches when available; accuracy "
+    "depends on food identification, portion size, recipe, and preparation method."
 )
 
-LAST_OPENAI_STATUS: dict[str, Any] = {
-    "attempted": False,
-    "ok": False,
-    "last_error_type": "not_attempted",
-    "last_http_status": None,
+USDA_FDC_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
+USDA_DATA_TYPES = ("Survey (FNDDS)", "Foundation", "SR Legacy")
+NUTRIENT_IDS = {
+    "calories": 1008,
+    "protein": 1003,
+    "fat": 1004,
+    "carbohydrates": 1005,
+}
+
+LAST_NUTRITION_STATUS: dict[str, Any] = {
+    "openai_attempted": False,
+    "openai_ok": False,
+    "openai_last_error_type": "not_attempted",
+    "openai_last_http_status": None,
+    "usda_attempted": False,
+    "usda_ok": False,
+    "usda_last_error_type": "not_attempted",
+    "usda_last_http_status": None,
 }
 
 
 @dataclass(frozen=True)
-class FoodProfile:
-    calories: float
-    carbohydrates: float
-    protein: float
-    fat: float
-    aliases: tuple[str, ...]
+class ParsedFood:
+    query: str
+    quantity: float = 1.0
+    unit: str = "serving"
+    raw_text: str = ""
 
-
-FOODS: dict[str, FoodProfile] = {
-    "rice": FoodProfile(205, 45, 4, 0.4, ("rice", "white rice", "brown rice")),
-    "chicken": FoodProfile(165, 0, 31, 3.6, ("chicken", "chicken breast")),
-    "egg": FoodProfile(72, 0.4, 6.3, 4.8, ("egg", "eggs")),
-    "bread": FoodProfile(80, 15, 3, 1, ("bread", "toast")),
-    "oatmeal": FoodProfile(154, 27, 6, 3, ("oatmeal", "oats")),
-    "banana": FoodProfile(105, 27, 1.3, 0.4, ("banana",)),
-    "apple": FoodProfile(95, 25, 0.5, 0.3, ("apple",)),
-    "salad": FoodProfile(120, 12, 4, 7, ("salad",)),
-    "pasta": FoodProfile(220, 43, 8, 1.3, ("pasta", "spaghetti", "noodles")),
-    "beef": FoodProfile(250, 0, 26, 15, ("beef", "steak")),
-    "pork": FoodProfile(240, 0, 25, 14, ("pork",)),
-    "fish": FoodProfile(180, 0, 25, 8, ("fish", "salmon", "tuna")),
-    "tofu": FoodProfile(145, 4, 16, 9, ("tofu",)),
-    "beans": FoodProfile(225, 40, 15, 1, ("beans", "black beans", "lentils")),
-    "potato": FoodProfile(160, 37, 4, 0.2, ("potato", "potatoes")),
-    "yogurt": FoodProfile(150, 17, 9, 4, ("yogurt",)),
-    "milk": FoodProfile(122, 12, 8, 5, ("milk",)),
-    "avocado": FoodProfile(240, 13, 3, 22, ("avocado",)),
-    "pizza": FoodProfile(285, 36, 12, 10, ("pizza",)),
-    "burger": FoodProfile(540, 40, 25, 30, ("burger", "hamburger")),
-    "fries": FoodProfile(365, 48, 4, 17, ("fries", "french fries")),
-    "soda": FoodProfile(150, 39, 0, 0, ("soda", "cola")),
-}
-
-
-COUNT_WORDS = {
-    "a": 1,
-    "an": 1,
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-}
+    @property
+    def estimated_grams(self) -> float:
+        return _estimated_grams(self.quantity, self.unit, self.query)
 
 
 def estimate_nutrition(text: str = "", image_base64: list[str] | None = None) -> dict[str, Any]:
     images = image_base64 or []
-    ai_result = _estimate_with_openai(text=text, image_base64=images)
-    if ai_result:
-        return ai_result
-
-    local = _estimate_from_text(text)
-    if local["matched_foods"]:
-        return local
+    parsed_foods = _parse_food_text(text)
 
     if images:
-        servings = max(1, min(len(images), 4))
+        parsed_foods.extend(_identify_foods_with_openai(text=text, image_base64=images))
+
+    deduped_foods = _dedupe_foods(parsed_foods)
+    if not deduped_foods:
         return _format_result(
-            calories=450 * servings,
-            carbohydrates=48 * servings,
-            protein=22 * servings,
-            fat=16 * servings,
-            matched_foods=["photo meal estimate"],
-            source="photo_fallback",
+            calories=0,
+            carbohydrates=0,
+            protein=0,
+            fat=0,
+            matched_foods=[],
+            source="unable_to_estimate",
             confidence="low",
-            explanation=(
-                "Photo upload was received, but the AI vision estimate is unavailable. "
-                "This uses a conservative generic meal estimate until the photo can be "
-                "identified by a model."
-            ),
+            explanation="No recognizable food and portion information was found.",
         )
+
+    usda_result = _estimate_with_usda(deduped_foods)
+    if usda_result:
+        return usda_result
 
     return _format_result(
         calories=0,
@@ -105,81 +84,198 @@ def estimate_nutrition(text: str = "", image_base64: list[str] | None = None) ->
         protein=0,
         fat=0,
         matched_foods=[],
-        source="local_rules",
+        source="unable_to_estimate",
         confidence="low",
-        explanation="No recognizable foods were found. Add foods or portions for a better estimate.",
+        explanation=(
+            "Food items were detected, but USDA FoodData Central could not be reached "
+            "or did not return usable nutrient matches."
+        ),
     )
 
 
-def _estimate_from_text(text: str) -> dict[str, Any]:
-    normalized = text.lower()
-    calories = carbohydrates = protein = fat = 0.0
-    matched: list[str] = []
+def _parse_food_text(text: str) -> list[ParsedFood]:
+    cleaned = text.strip()
+    if not cleaned:
+        return []
 
-    for name, profile in FOODS.items():
-        if not any(re.search(rf"\b{re.escape(alias)}\b", normalized) for alias in profile.aliases):
+    parsed_with_library = _parse_with_ingredient_parser(cleaned)
+    if parsed_with_library:
+        return parsed_with_library
+
+    return [_parse_food_fragment(fragment) for fragment in _food_fragments(cleaned)]
+
+
+def _parse_with_ingredient_parser(text: str) -> list[ParsedFood]:
+    try:
+        from ingredient_parser import parse_ingredient  # type: ignore
+    except ImportError:
+        return []
+
+    foods: list[ParsedFood] = []
+    for fragment in _food_fragments(text):
+        try:
+            parsed = parse_ingredient(fragment)
+        except Exception as exc:  # pragma: no cover - defensive around optional dependency
+            logger.debug("ingredient-parser failed for %r: %s", fragment, exc)
             continue
-        multiplier = _portion_multiplier(normalized, profile.aliases)
-        calories += profile.calories * multiplier
-        carbohydrates += profile.carbohydrates * multiplier
-        protein += profile.protein * multiplier
-        fat += profile.fat * multiplier
-        matched.append(name if multiplier == 1 else f"{multiplier:g}x {name}")
 
-    confidence = "medium" if len(matched) >= 2 else "low"
-    explanation = (
-        "Estimated from the typed food description using common serving-size nutrition values."
-        if matched
-        else "No recognizable foods were found in the typed description."
+        query = _first_parser_text(getattr(parsed, "name", None))
+        if not query:
+            continue
+        quantity, unit = _first_parser_amount(getattr(parsed, "amount", None))
+        foods.append(
+            ParsedFood(
+                query=_clean_food_query(query),
+                quantity=quantity,
+                unit=unit,
+                raw_text=fragment,
+            )
+        )
+    return [food for food in foods if food.query]
+
+
+def _first_parser_text(value: Any) -> str:
+    if not value:
+        return ""
+    first = value[0] if isinstance(value, list) else value
+    return str(getattr(first, "text", first)).strip()
+
+
+def _first_parser_amount(value: Any) -> tuple[float, str]:
+    if not value:
+        return 1.0, "serving"
+    first = value[0] if isinstance(value, list) else value
+    quantity = getattr(first, "quantity", 1)
+    unit = getattr(first, "unit", "serving")
+    try:
+        parsed_quantity = float(quantity)
+    except (TypeError, ValueError):
+        try:
+            parsed_quantity = float(Fraction(str(quantity)))
+        except (ValueError, ZeroDivisionError):
+            parsed_quantity = 1.0
+    return max(parsed_quantity, 0.25), str(unit or "serving")
+
+
+def _food_fragments(text: str) -> list[str]:
+    normalized = re.sub(r"\b(i ate|i had|ate|had|for breakfast|for lunch|for dinner)\b", "", text, flags=re.I)
+    pieces = re.split(r"\n|,|;|\band\b|\bwith\b|\bplus\b|&", normalized)
+    return [piece.strip(" .") for piece in pieces if piece.strip(" .")]
+
+
+def _parse_food_fragment(fragment: str) -> ParsedFood:
+    words = fragment.strip().split()
+    quantity = 1.0
+    unit = "serving"
+    query = fragment
+    start_index = 0
+
+    if words:
+        first_word = words[0].lower()
+        if _looks_like_quantity(first_word):
+            quantity = _quantity_from_text(first_word)
+            start_index = 1
+        elif first_word in {"a", "an"}:
+            quantity = 1.0
+            start_index = 1
+
+    if start_index < len(words) and _looks_like_unit(words[start_index]):
+        unit = words[start_index]
+        start_index += 1
+
+    if start_index < len(words) and words[start_index].lower() == "of":
+        start_index += 1
+
+    if start_index < len(words):
+        query = " ".join(words[start_index:])
+    return ParsedFood(query=_clean_food_query(query), quantity=quantity, unit=unit, raw_text=fragment)
+
+
+def _looks_like_quantity(value: str) -> bool:
+    return bool(
+        re.match(
+            r"^(\d+(?:\.\d+)?|\d+\s*/\s*\d+|one|two|three|four|five|six|seven|eight|nine|ten|half)$",
+            value.lower().strip(),
+        )
     )
-    return _format_result(
-        calories=calories,
-        carbohydrates=carbohydrates,
-        protein=protein,
-        fat=fat,
-        matched_foods=matched,
-        source="local_rules",
-        confidence=confidence,
-        explanation=explanation,
-    )
 
 
-def _portion_multiplier(text: str, aliases: tuple[str, ...]) -> float:
-    multiplier = 1.0
-    for alias in aliases:
-        pattern = rf"(?:(\d+(?:\.\d+)?)|({'|'.join(COUNT_WORDS)}))\s+(?:cups?|pieces?|servings?|plates?|bowls?|slices?)?\s*{re.escape(alias)}"
-        match = re.search(pattern, text)
-        if match:
-            if match.group(1):
-                multiplier = float(match.group(1))
-            elif match.group(2):
-                multiplier = float(COUNT_WORDS[match.group(2)])
-            break
-    if "small" in text:
-        multiplier *= 0.75
-    if "large" in text:
-        multiplier *= 1.25
-    if "half" in text:
-        multiplier *= 0.5
-    return max(0.25, min(multiplier, 6))
+def _quantity_from_text(value: str | None) -> float:
+    if not value:
+        return 1.0
+    words = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "half": 0.5,
+    }
+    lowered = value.lower().strip()
+    if lowered in words:
+        return float(words[lowered])
+    try:
+        return float(Fraction(lowered.replace(" ", "")))
+    except (ValueError, ZeroDivisionError):
+        return 1.0
 
 
-def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] | None:
+def _looks_like_unit(value: str) -> bool:
+    return value.lower().strip() in {
+        "cup",
+        "cups",
+        "piece",
+        "pieces",
+        "slice",
+        "slices",
+        "serving",
+        "servings",
+        "bowl",
+        "bowls",
+        "plate",
+        "plates",
+        "oz",
+        "ounce",
+        "ounces",
+        "g",
+        "gram",
+        "grams",
+        "lb",
+        "pound",
+        "pounds",
+        "tbsp",
+        "tablespoon",
+        "tablespoons",
+        "tsp",
+        "teaspoon",
+        "teaspoons",
+    }
+
+
+def _clean_food_query(value: str) -> str:
+    cleaned = re.sub(r"\b(small|large|medium|of|some|about|around)\b", "", value, flags=re.I)
+    return re.sub(r"\s+", " ", cleaned).strip(" .")
+
+
+def _identify_foods_with_openai(text: str, image_base64: list[str]) -> list[ParsedFood]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         _record_openai_status(ok=False, error_type="not_configured")
-        return None
+        return []
 
     content: list[dict[str, Any]] = [
         {
             "type": "input_text",
             "text": (
-                "Estimate calories and macronutrients for this food intake. "
-                "Use photos and text together, and treat portion size as uncertain unless it is clearly stated. "
-                "Return only JSON with keys: "
-                "calories, carbohydrates, protein, fat, matched_foods, confidence, explanation. "
-                "Use grams for macros. Do not provide medical advice, diet prescriptions, or moral judgments. "
-                "If uncertain, be conservative and explain uncertainty. "
+                "Identify foods and approximate portions from this food photo/text input. "
+                "Do not estimate calories or nutrients. Return only JSON with an "
+                "ingredient_lines array, where each item is a short ingredient phrase such as "
+                "'1 cup cooked rice' or '1 medium apple'. "
                 f"Typed description: {text or '(none)'}"
             ),
         }
@@ -213,58 +309,241 @@ def _estimate_with_openai(text: str, image_base64: list[str]) -> dict[str, Any] 
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:500]
         _record_openai_status(ok=False, error_type="http_error", http_status=exc.code)
-        logger.warning("OpenAI nutrition request failed status=%s body=%s", exc.code, body)
-        return None
-    except urllib.error.URLError as exc:
-        _record_openai_status(ok=False, error_type="url_error")
-        logger.warning("OpenAI nutrition request failed: %s", exc)
-        return None
-    except TimeoutError:
-        _record_openai_status(ok=False, error_type="timeout")
-        logger.warning("OpenAI nutrition request timed out")
-        return None
-    except json.JSONDecodeError:
-        _record_openai_status(ok=False, error_type="invalid_response_json")
-        logger.warning("OpenAI nutrition response was not valid JSON")
-        return None
+        logger.warning("OpenAI food identification failed status=%s body=%s", exc.code, body)
+        return []
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        _record_openai_status(ok=False, error_type=type(exc).__name__)
+        logger.warning("OpenAI food identification failed: %s", exc)
+        return []
 
     text_output = _extract_openai_text(raw)
-    if not text_output:
-        _record_openai_status(ok=False, error_type="missing_output_text")
-        logger.warning("OpenAI nutrition response did not include output text")
-        return None
-    try:
-        parsed = json.loads(text_output)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text_output, flags=re.DOTALL)
-        if not match:
-            _record_openai_status(ok=False, error_type="invalid_output_json")
-            logger.warning("OpenAI nutrition output was not valid JSON: %s", text_output[:500])
-            return None
-        try:
-            parsed = json.loads(match.group(0))
-        except json.JSONDecodeError:
-            _record_openai_status(ok=False, error_type="invalid_output_json")
-            logger.warning("OpenAI nutrition output JSON extraction failed: %s", text_output[:500])
-            return None
+    parsed = _json_object_from_text(text_output)
+    if not parsed:
+        _record_openai_status(ok=False, error_type="invalid_output_json")
+        return []
 
-    try:
-        result = _format_result(
-            calories=_safe_nonnegative_float(parsed.get("calories", 0)),
-            carbohydrates=_safe_nonnegative_float(parsed.get("carbohydrates", 0)),
-            protein=_safe_nonnegative_float(parsed.get("protein", 0)),
-            fat=_safe_nonnegative_float(parsed.get("fat", 0)),
-            matched_foods=[str(item) for item in parsed.get("matched_foods", [])],
-            source="vision_language_model",
-            confidence=str(parsed.get("confidence", "medium")),
-            explanation=str(parsed.get("explanation", "Estimated from food photo/text input.")),
-        )
-        _record_openai_status(ok=True, error_type=None)
-        return result
-    except (TypeError, ValueError):
-        _record_openai_status(ok=False, error_type="invalid_nutrition_values")
-        logger.warning("OpenAI nutrition output contained invalid nutrition values: %s", parsed)
+    ingredient_lines = parsed.get("ingredient_lines", [])
+    if not isinstance(ingredient_lines, list):
+        _record_openai_status(ok=False, error_type="invalid_ingredient_lines")
+        return []
+
+    _record_openai_status(ok=True, error_type=None)
+    return _parse_food_text("\n".join(str(item) for item in ingredient_lines))
+
+
+def _estimate_with_usda(foods: list[ParsedFood]) -> dict[str, Any] | None:
+    totals = {"calories": 0.0, "carbohydrates": 0.0, "protein": 0.0, "fat": 0.0}
+    matched_foods: list[str] = []
+    missing: list[str] = []
+
+    for food in foods:
+        match = _search_usda_food(food.query)
+        if not match:
+            missing.append(food.query)
+            continue
+        grams = food.estimated_grams
+        factor = grams / 100
+        nutrients = _nutrients_per_100g(match)
+        for key in totals:
+            totals[key] += nutrients.get(key, 0.0) * factor
+        matched_foods.append(f"{food.quantity:g} {food.unit} {match['description']} (FDC {match['fdcId']})")
+
+    if not matched_foods:
         return None
+
+    confidence = "medium" if not missing else "low"
+    if len(matched_foods) >= 2 and not missing:
+        confidence = "high"
+    explanation = (
+        "Estimated by matching parsed food items to USDA FoodData Central records "
+        f"({', '.join(USDA_DATA_TYPES)}) and scaling nutrients by approximate portion weight."
+    )
+    if missing:
+        explanation += f" No USDA match was found for: {', '.join(missing)}."
+
+    return _format_result(
+        calories=totals["calories"],
+        carbohydrates=totals["carbohydrates"],
+        protein=totals["protein"],
+        fat=totals["fat"],
+        matched_foods=matched_foods,
+        source="usda_fdc",
+        confidence=confidence,
+        explanation=explanation,
+    )
+
+
+def _search_usda_food(query: str) -> dict[str, Any] | None:
+    api_key = os.getenv("USDA_FDC_API_KEY", "DEMO_KEY")
+    params = urllib.parse.urlencode({"api_key": api_key})
+    payload = {
+        "query": _food_search_query(query),
+        "pageSize": 25,
+        "dataType": list(USDA_DATA_TYPES),
+    }
+    request = urllib.request.Request(
+        f"{USDA_FDC_SEARCH_URL}?{params}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    _record_usda_status(ok=False, error_type="request_started")
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            raw = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        _record_usda_status(ok=False, error_type="http_error", http_status=exc.code)
+        logger.warning("USDA FoodData Central request failed status=%s query=%s", exc.code, query)
+        return None
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        _record_usda_status(ok=False, error_type=type(exc).__name__)
+        logger.warning("USDA FoodData Central request failed query=%s error=%s", query, exc)
+        return None
+
+    foods = raw.get("foods", [])
+    if not foods:
+        _record_usda_status(ok=False, error_type="no_match")
+        return None
+    _record_usda_status(ok=True, error_type=None)
+    return _best_usda_match(query, foods)
+
+
+def _food_search_query(query: str) -> str:
+    lowered = query.lower().strip()
+    canonical_queries = {
+        "chicken": "chicken breast cooked",
+        "rice": "rice cooked nfs",
+        "apple": "apple raw",
+        "banana": "banana raw",
+        "egg": "egg cooked",
+    }
+    return canonical_queries.get(lowered, query)
+
+
+def _best_usda_match(query: str, foods: list[dict[str, Any]]) -> dict[str, Any] | None:
+    candidates = [food for food in foods if _nutrients_per_100g(food)["calories"] > 0]
+    if not candidates:
+        return None
+    search_query = _food_search_query(query)
+    query_tokens = _food_tokens(search_query)
+    return max(candidates, key=lambda food: _usda_match_score(search_query, query_tokens, food))
+
+
+def _usda_match_score(search_query: str, query_tokens: set[str], food: dict[str, Any]) -> float:
+    description = str(food.get("description", "")).lower()
+    description_tokens = _food_tokens(description)
+    overlap = len(query_tokens & description_tokens)
+    extra_tokens = len(description_tokens - query_tokens - {"nfs", "ns", "cooked", "raw"})
+    score = overlap * 10 - extra_tokens * 0.6
+
+    if description.startswith(search_query.lower()):
+        score += 4
+    if any(description.startswith(token) for token in query_tokens):
+        score += 2
+    if "raw" in query_tokens and "raw" in description_tokens:
+        score += 3
+    if "cooked" in query_tokens and "cooked" in description_tokens:
+        score += 3
+    score -= _mismatch_penalty(query_tokens, description_tokens)
+    if food.get("dataType") == "Foundation":
+        score += 2
+    elif food.get("dataType") == "SR Legacy":
+        score += 1
+    return score
+
+
+def _mismatch_penalty(query_tokens: set[str], description_tokens: set[str]) -> float:
+    penalty = 0.0
+    if "rice" in query_tokens and "noodles" in description_tokens:
+        penalty += 12
+    if "chicken" in query_tokens:
+        penalty += 8 * len(
+            description_tokens
+            & {
+                "breaded",
+                "tenders",
+                "roll",
+                "feet",
+                "skin",
+                "back",
+                "tail",
+                "soup",
+                "orange",
+                "biryani",
+                "almond",
+            }
+        )
+    return penalty
+
+
+def _food_tokens(value: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z]+", value.lower())
+        if token not in {"and", "with", "without", "the", "a", "an", "of", "or"}
+    }
+
+
+def _nutrients_per_100g(food: dict[str, Any]) -> dict[str, float]:
+    values = {key: 0.0 for key in NUTRIENT_IDS}
+    for nutrient in food.get("foodNutrients", []):
+        nutrient_id = nutrient.get("nutrientId")
+        for key, expected_id in NUTRIENT_IDS.items():
+            if nutrient_id == expected_id:
+                values[key] = _safe_nonnegative_float(nutrient.get("value", 0))
+    return values
+
+
+def _estimated_grams(quantity: float, unit: str, query: str) -> float:
+    normalized_unit = unit.lower().strip()
+    query_lower = query.lower()
+    rice_or_pasta = any(word in query_lower for word in ("rice", "pasta", "oat"))
+    grams_per_unit = {
+        "g": 1,
+        "gram": 1,
+        "grams": 1,
+        "oz": 28.35,
+        "ounce": 28.35,
+        "ounces": 28.35,
+        "lb": 453.59,
+        "pound": 453.59,
+        "pounds": 453.59,
+        "cup": 160 if rice_or_pasta else 240,
+        "cups": 160 if rice_or_pasta else 240,
+        "slice": 30,
+        "slices": 30,
+        "piece": 100,
+        "pieces": 100,
+        "bowl": 300,
+        "bowls": 300,
+        "plate": 350,
+        "plates": 350,
+        "serving": 100,
+        "servings": 100,
+        "tbsp": 15,
+        "tablespoon": 15,
+        "tablespoons": 15,
+        "tsp": 5,
+        "teaspoon": 5,
+        "teaspoons": 5,
+    }
+    grams = grams_per_unit.get(normalized_unit, 100) * quantity
+    if "small" in query_lower:
+        grams *= 0.75
+    if "large" in query_lower:
+        grams *= 1.25
+    return max(5, min(grams, 2000))
+
+
+def _dedupe_foods(foods: list[ParsedFood]) -> list[ParsedFood]:
+    seen: set[tuple[str, str, float]] = set()
+    deduped: list[ParsedFood] = []
+    for food in foods:
+        key = (food.query.lower(), food.unit.lower(), round(food.quantity, 2))
+        if food.query and key not in seen:
+            seen.add(key)
+            deduped.append(food)
+    return deduped
 
 
 def _safe_nonnegative_float(value: Any) -> float:
@@ -275,12 +554,23 @@ def _safe_nonnegative_float(value: Any) -> float:
 
 
 def _record_openai_status(*, ok: bool, error_type: str | None, http_status: int | None = None) -> None:
-    LAST_OPENAI_STATUS.update(
+    LAST_NUTRITION_STATUS.update(
         {
-            "attempted": error_type != "not_configured",
-            "ok": ok,
-            "last_error_type": error_type,
-            "last_http_status": http_status,
+            "openai_attempted": error_type != "not_configured",
+            "openai_ok": ok,
+            "openai_last_error_type": error_type,
+            "openai_last_http_status": http_status,
+        }
+    )
+
+
+def _record_usda_status(*, ok: bool, error_type: str | None, http_status: int | None = None) -> None:
+    LAST_NUTRITION_STATUS.update(
+        {
+            "usda_attempted": error_type != "not_configured",
+            "usda_ok": ok,
+            "usda_last_error_type": error_type,
+            "usda_last_http_status": http_status,
         }
     )
 
@@ -288,9 +578,12 @@ def _record_openai_status(*, ok: bool, error_type: str | None, http_status: int 
 def get_nutrition_ai_status() -> dict[str, Any]:
     return {
         "openai_api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
-        "model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-4o-mini"),
-        "image_detail": os.getenv("OPENAI_NUTRITION_IMAGE_DETAIL", "high"),
-        **LAST_OPENAI_STATUS,
+        "openai_model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-4o-mini"),
+        "openai_image_detail": os.getenv("OPENAI_NUTRITION_IMAGE_DETAIL", "high"),
+        "usda_fdc_api_key_configured": bool(os.getenv("USDA_FDC_API_KEY")),
+        "usda_fdc_data_types": list(USDA_DATA_TYPES),
+        "nutrition_source": "USDA FoodData Central",
+        **LAST_NUTRITION_STATUS,
     }
 
 
@@ -304,6 +597,20 @@ def _extract_openai_text(response: dict[str, Any]) -> str:
             if isinstance(text, str):
                 parts.append(text)
     return "\n".join(parts)
+
+
+def _json_object_from_text(text: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _format_result(
