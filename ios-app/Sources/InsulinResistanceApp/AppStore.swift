@@ -137,6 +137,10 @@ final class AppStore: ObservableObject {
         screen = .checkInEntry
     }
 
+    func viewTodaySummary() {
+        showMain(tab: .progress)
+    }
+
     func completeCheckIn() {
         guard canGenerateDailyFeedback else {
             markFeedbackWaitingForRequiredAnswers()

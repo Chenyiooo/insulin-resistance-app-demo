@@ -19,43 +19,27 @@ struct CheckInEntryView: View {
                     CloudyMascotView(size: 240)
                         .padding(.top, 34)
 
-                    VStack(spacing: 12) {
-                        Text("How would you like to check in?")
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundStyle(.black)
-                            .multilineTextAlignment(.center)
-                        Text("Choose a method to log today's sleep, habits, activity, and optional food journal.")
-                            .font(.title3)
+                    if store.checkIn.isCompleted {
+                        completedCheckInContent
+                    } else {
+                        VStack(spacing: 12) {
+                            Text("How would you like to check in?")
+                                .font(.system(size: 30, weight: .bold))
+                                .foregroundStyle(.black)
+                                .multilineTextAlignment(.center)
+                            Text("Choose a method to log today's sleep, habits, activity, and optional food journal.")
+                                .font(.title3)
+                                .foregroundStyle(AppColor.muted)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(5)
+                        }
+
+                        methodChoices
+
+                        Text("You can switch methods at any time · About 3-5 min")
+                            .font(.callout)
                             .foregroundStyle(AppColor.muted)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(5)
                     }
-
-                    VStack(spacing: 18) {
-                        MethodCard(
-                            icon: "bubble.left.and.bubble.right",
-                            title: "Talk to Cloudy",
-                            subtitle: "Share by text",
-                            badge: "Conversational",
-                            isHighlighted: true
-                        ) {
-                            store.screen = .aiCheckIn
-                        }
-
-                        MethodCard(
-                            icon: "checklist",
-                            title: "Manual Input",
-                            subtitle: "Complete a guided form",
-                            badge: "Step by step",
-                            isHighlighted: false
-                        ) {
-                            store.screen = .manualCheckIn
-                        }
-                    }
-
-                    Text("You can switch methods at any time · About 3-5 min")
-                        .font(.callout)
-                        .foregroundStyle(AppColor.muted)
 
                     Spacer(minLength: 24)
                 }
@@ -68,6 +52,98 @@ struct CheckInEntryView: View {
             }
         }
         .background(.white)
+    }
+
+    private var completedCheckInContent: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 12) {
+                Label("Completed today", systemImage: "checkmark.seal.fill")
+                    .font(.headline)
+                    .foregroundStyle(.green)
+                Text("View today's summary or update anything you logged.")
+                    .font(.title3)
+                    .foregroundStyle(AppColor.muted)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(5)
+            }
+
+            SectionCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Today's Summary")
+                        .font(.headline)
+                        .foregroundStyle(AppColor.text)
+                    summaryRow(icon: "moon.zzz", label: "Sleep", value: loggedValue(store.checkIn.sleepHours, suffix: "hr"))
+                    summaryRow(icon: "figure.walk", label: "Activity", value: activitySummary)
+                    summaryRow(icon: "figure.stand", label: "Movement breaks", value: emptyFallback(store.checkIn.movementBreaks))
+                    summaryRow(icon: "fork.knife", label: "Food journal", value: store.checkIn.foodJournalSummary)
+                }
+            }
+
+            PrimaryButton(title: "View Today's Summary") {
+                store.viewTodaySummary()
+            }
+
+            OutlineButton(title: "Update Check-in") {
+                store.screen = .manualCheckIn
+            }
+        }
+    }
+
+    private var methodChoices: some View {
+        VStack(spacing: 18) {
+            MethodCard(
+                icon: "bubble.left.and.bubble.right",
+                title: "Talk to Cloudy",
+                subtitle: "Share by text",
+                badge: "Conversational",
+                isHighlighted: true
+            ) {
+                store.screen = .aiCheckIn
+            }
+
+            MethodCard(
+                icon: "checklist",
+                title: "Manual Input",
+                subtitle: "Complete a guided form",
+                badge: "Step by step",
+                isHighlighted: false
+            ) {
+                store.screen = .manualCheckIn
+            }
+        }
+    }
+
+    private var activitySummary: String {
+        if store.checkIn.activeToday == false {
+            return "No activity today"
+        }
+        return loggedValue(store.checkIn.activityDuration, suffix: "min")
+    }
+
+    private func summaryRow(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(AppColor.blue)
+                .frame(width: 24)
+            Text(label)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(AppColor.text)
+            Spacer()
+            Text(value)
+                .font(.callout)
+                .foregroundStyle(AppColor.muted)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func loggedValue(_ value: String, suffix: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Not logged" : "\(trimmed) \(suffix)"
+    }
+
+    private func emptyFallback(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Not logged" : trimmed
     }
 }
 

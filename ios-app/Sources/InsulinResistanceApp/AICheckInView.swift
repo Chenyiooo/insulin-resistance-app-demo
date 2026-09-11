@@ -87,6 +87,7 @@ struct AICheckInView: View {
     @State private var selectedFoodPhotos: [PhotosPickerItem] = []
     @State private var foodPhotoBase64: [String] = []
     @State private var isFoodDescriptionVisible = false
+    @State private var foodDescriptionDraft = ""
     private var greetingName: String {
         let trimmedName = store.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedName.isEmpty ? "there" : trimmedName
@@ -250,6 +251,10 @@ struct AICheckInView: View {
             if !orderedSteps.contains(step) {
                 step = firstStep
             }
+            foodDescriptionDraft = store.checkIn.foodJournalDescription
+            isFoodDescriptionVisible = !store.checkIn.foodJournalDescription
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
         }
     }
 
@@ -367,6 +372,7 @@ struct AICheckInView: View {
                 }
                 .buttonStyle(.plain)
                 .onChange(of: selectedFoodPhotos) { _, newValue in
+                    commitFoodDescription()
                     store.checkIn.foodPhotoCount = newValue.count
                     updateFoodJournalStatus()
                     Task {
@@ -380,6 +386,7 @@ struct AICheckInView: View {
 
                 Button {
                     isFoodDescriptionVisible = true
+                    foodDescriptionDraft = store.checkIn.foodJournalDescription
                 } label: {
                     FoodJournalActionButton(
                         icon: "square.and.pencil",
@@ -394,14 +401,12 @@ struct AICheckInView: View {
                     Text("Food description")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AppColor.text)
-                    TextEditor(text: $store.checkIn.foodJournalDescription)
+                    TextEditor(text: $foodDescriptionDraft)
                         .frame(minHeight: 92)
                         .padding(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
-                        .onChange(of: store.checkIn.foodJournalDescription) { _, _ in
-                            updateFoodJournalStatus()
-                        }
                     Button {
+                        commitFoodDescription()
                         estimateFoodAndContinue()
                     } label: {
                         Label("Estimate nutrition and continue", systemImage: "wand.and.stars")
@@ -619,7 +624,8 @@ struct AICheckInView: View {
     }
 
     private func updateFoodJournalStatus() {
-        let hasDescription = !store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasDescription = !foodDescriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasPhotos = store.checkIn.foodPhotoCount > 0
         let hasNutrition = [
             store.checkIn.foodCalories,
@@ -634,7 +640,16 @@ struct AICheckInView: View {
         }
     }
 
+    private func commitFoodDescription() {
+        let draft = foodDescriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if store.checkIn.foodJournalDescription != draft {
+            store.checkIn.foodJournalDescription = draft
+        }
+        updateFoodJournalStatus()
+    }
+
     private func estimateFoodAndContinue() {
+        commitFoodDescription()
         let description = store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         if !description.isEmpty || !foodPhotoBase64.isEmpty {
             store.checkIn.foodJournal = "Added"
@@ -644,6 +659,7 @@ struct AICheckInView: View {
     }
 
     private func continueFromFoodJournal() {
+        commitFoodDescription()
         let description = store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         if !description.isEmpty || store.checkIn.foodPhotoCount > 0 {
             store.checkIn.foodJournal = "Added"
@@ -660,6 +676,7 @@ struct AICheckInView: View {
         selectedFoodPhotos = []
         foodPhotoBase64 = []
         isFoodDescriptionVisible = false
+        foodDescriptionDraft = ""
         store.checkIn.foodPhotoCount = 0
         store.checkIn.foodJournalDescription = ""
         store.checkIn.foodCalories = ""

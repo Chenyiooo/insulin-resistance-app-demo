@@ -28,15 +28,19 @@ struct HomeView: View {
 
                 SectionCard {
                     VStack(alignment: .leading, spacing: 24) {
-                        Text("Today's Check-in")
+                        Text(store.checkIn.isCompleted ? "Today's Check-in Complete" : "Today's Check-in")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(AppColor.ink)
-                        Text("Log today's sleep, activity, movement breaks, and optional food journal.")
+                        Text(store.checkIn.isCompleted ? "You finished today's check-in. Review what you logged and the feedback generated from it." : "Log today's sleep, activity, movement breaks, and optional food journal.")
                             .font(.title3)
                             .foregroundStyle(AppColor.muted)
                             .lineSpacing(4)
-                        PrimaryButton(title: "Start Check-in") {
-                            store.startCheckIn()
+                        PrimaryButton(title: store.checkIn.isCompleted ? "View Today's Summary" : "Start Check-in") {
+                            if store.checkIn.isCompleted {
+                                store.viewTodaySummary()
+                            } else {
+                                store.startCheckIn()
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

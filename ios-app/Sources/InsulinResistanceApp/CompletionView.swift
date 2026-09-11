@@ -11,8 +11,8 @@ struct CompletionView: View {
                 .font(.title.bold())
                 .foregroundStyle(.black)
             Spacer()
-            PrimaryButton(title: "Go to Homepage") {
-                store.showMain(tab: .home)
+            PrimaryButton(title: "View Today's Summary") {
+                store.viewTodaySummary()
             }
             .padding(.horizontal, 32)
             Spacer()

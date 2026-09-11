@@ -13,6 +13,7 @@ struct ManualCheckInView: View {
     @State private var selectedFoodPhotos: [PhotosPickerItem] = []
     @State private var foodPhotoBase64: [String] = []
     @State private var isFoodJournalDescriptionVisible = false
+    @State private var foodJournalDescriptionDraft = ""
     @State private var isShowingActivityPrototypeNote = false
     @State private var additionalActivities: [AdditionalActivityDraft] = []
     private var totalSteps: Int {
@@ -67,6 +68,7 @@ struct ManualCheckInView: View {
             Text(missingDataMessage)
         }
         .onAppear {
+            foodJournalDescriptionDraft = store.checkIn.foodJournalDescription
             isFoodJournalDescriptionVisible = !store.checkIn.foodJournalDescription
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty
@@ -80,6 +82,7 @@ struct ManualCheckInView: View {
     }
 
     private func continueWithValidation() {
+        commitFoodJournalDescription()
         missingItems = currentStepMissingDataItems()
         if missingItems.isEmpty {
             if step == totalSteps {
@@ -367,6 +370,7 @@ struct ManualCheckInView: View {
                     }
                     .buttonStyle(.plain)
                     .onChange(of: selectedFoodPhotos) { _, newValue in
+                        commitFoodJournalDescription()
                         store.checkIn.foodPhotoCount = newValue.count
                         updateFoodJournalStatus()
                         Task {
@@ -377,6 +381,7 @@ struct ManualCheckInView: View {
 
                     Button {
                         isFoodJournalDescriptionVisible = true
+                        foodJournalDescriptionDraft = store.checkIn.foodJournalDescription
                     } label: {
                         FoodJournalActionButton(
                             icon: "square.and.pencil",
@@ -391,14 +396,12 @@ struct ManualCheckInView: View {
                         Text("Food journal notes")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppColor.text)
-                        TextEditor(text: $store.checkIn.foodJournalDescription)
+                        TextEditor(text: $foodJournalDescriptionDraft)
                             .frame(minHeight: 96)
                             .padding(8)
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
-                            .onChange(of: store.checkIn.foodJournalDescription) { _, _ in
-                                updateFoodJournalStatus()
-                            }
                         Button {
+                            commitFoodJournalDescription()
                             store.estimateFoodNutrition(
                                 text: store.checkIn.foodJournalDescription,
                                 imageBase64: foodPhotoBase64
@@ -484,6 +487,7 @@ struct ManualCheckInView: View {
                     selectedFoodPhotos = []
                     foodPhotoBase64 = []
                     isFoodJournalDescriptionVisible = false
+                    foodJournalDescriptionDraft = ""
                     store.checkIn.foodPhotoCount = 0
                     store.checkIn.foodJournalDescription = ""
                     clearNutritionEstimate()
@@ -526,7 +530,8 @@ struct ManualCheckInView: View {
     }
 
     private func updateFoodJournalStatus() {
-        let hasDescription = !store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasDescription = !foodJournalDescriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !store.checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasPhotos = store.checkIn.foodPhotoCount > 0
         let hasNutrition = [
             store.checkIn.foodCalories,
@@ -539,6 +544,14 @@ struct ManualCheckInView: View {
         } else if store.checkIn.foodJournal != "Skipped" {
             store.checkIn.foodJournal = ""
         }
+    }
+
+    private func commitFoodJournalDescription() {
+        let draft = foodJournalDescriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if store.checkIn.foodJournalDescription != draft {
+            store.checkIn.foodJournalDescription = draft
+        }
+        updateFoodJournalStatus()
     }
 
     private func clearNutritionEstimate() {
