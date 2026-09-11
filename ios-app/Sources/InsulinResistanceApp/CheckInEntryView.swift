@@ -21,6 +21,8 @@ struct CheckInEntryView: View {
 
                     if store.checkIn.isCompleted {
                         completedCheckInContent
+                    } else if store.hasStartedTodayCheckIn {
+                        resumeCheckInContent
                     } else {
                         VStack(spacing: 12) {
                             Text("How would you like to check in?")
@@ -84,7 +86,66 @@ struct CheckInEntryView: View {
             }
 
             OutlineButton(title: "Update Check-in") {
-                store.screen = .manualCheckIn
+                store.openManualCheckIn()
+            }
+        }
+    }
+
+    private var resumeCheckInContent: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 12) {
+                Text("Continue Today's Check-in")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(.black)
+                    .multilineTextAlignment(.center)
+                Text("Your previous answers are saved. Finish only the items still needed for today's feedback.")
+                    .font(.title3)
+                    .foregroundStyle(AppColor.muted)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(5)
+            }
+
+            if !missingCheckInItems.isEmpty {
+                SectionCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Missing information")
+                            .font(.headline)
+                            .foregroundStyle(AppColor.text)
+                        ForEach(missingCheckInItems) { item in
+                            Button {
+                                store.openManualCheckIn(focusedField: item.field)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "exclamationmark.circle")
+                                        .foregroundStyle(.orange)
+                                        .frame(width: 24)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.label)
+                                            .font(.callout.weight(.semibold))
+                                            .foregroundStyle(AppColor.text)
+                                        Text(missingReason(item.code))
+                                            .font(.caption)
+                                            .foregroundStyle(AppColor.muted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(AppColor.blue)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            PrimaryButton(title: missingCheckInItems.isEmpty ? "Review Check-in" : "Continue Check-in") {
+                store.resumeCheckIn()
+            }
+
+            OutlineButton(title: "Use AI input") {
+                store.screen = .aiCheckIn
             }
         }
     }
@@ -108,9 +169,13 @@ struct CheckInEntryView: View {
                 badge: "Step by step",
                 isHighlighted: false
             ) {
-                store.screen = .manualCheckIn
+                store.openManualCheckIn()
             }
         }
+    }
+
+    private var missingCheckInItems: [MissingDataItem] {
+        store.checkInMissingDataItems()
     }
 
     private var activitySummary: String {
@@ -133,6 +198,17 @@ struct CheckInEntryView: View {
                 .font(.callout)
                 .foregroundStyle(AppColor.muted)
                 .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func missingReason(_ code: String) -> String {
+        switch code {
+        case MissingDataCode.preferNotToAnswer:
+            return "Needed for a complete estimate"
+        case MissingDataCode.notSure:
+            return "Please confirm if possible"
+        default:
+            return "Required"
         }
     }
 

@@ -243,13 +243,21 @@ struct AICheckInView: View {
             .presentationDetents([.medium, .large])
         }
         .alert("Required answer missing", isPresented: $isShowingMissingDataWarning) {
+            Button("Go to first missing") {
+                navigateToFirstMissingItem()
+            }
             Button("Review", role: .cancel) {}
         } message: {
             Text(missingDataMessage)
         }
         .onAppear {
-            if !orderedSteps.contains(step) {
-                step = firstStep
+            if let requestedField = store.requestedCheckInField {
+                move(to: stepForMissingField(requestedField))
+                store.requestedCheckInField = nil
+            } else if !store.checkIn.isCompleted, let firstMissing = store.checkInMissingDataItems().first {
+                move(to: stepForMissingField(firstMissing.field))
+            } else if !orderedSteps.contains(step) {
+                move(to: firstStep)
             }
             foodDescriptionDraft = store.checkIn.foodJournalDescription
             isFoodDescriptionVisible = !store.checkIn.foodJournalDescription
@@ -802,6 +810,41 @@ struct AICheckInView: View {
             MissingDataItem(field: field, label: label, code: MissingDataCode.missing)
         ]
         isShowingMissingDataWarning = true
+    }
+
+    private func navigateToFirstMissingItem() {
+        if let firstMissing = missingItems.first {
+            move(to: stepForMissingField(firstMissing.field))
+        }
+    }
+
+    private func stepForMissingField(_ field: String) -> AIQuestionStep {
+        switch field {
+        case "weight":
+            return .weight
+        case "waist_circumference":
+            return .waist
+        case "systolic_bp":
+            return .bloodPressureSystolic
+        case "diastolic_bp":
+            return .bloodPressureDiastolic
+        case "blood_pressure_date":
+            return .bloodPressureDate
+        case "sleep_hours":
+            return .sleep
+        case "physical_activity_today":
+            return .activity
+        case "activity_type":
+            return .activityType
+        case "activity_duration":
+            return .activityDuration
+        case "movement_breaks":
+            return .movement
+        case "daily_reflection":
+            return .reflection
+        default:
+            return firstStep
+        }
     }
 
     private func completeWithValidation() {

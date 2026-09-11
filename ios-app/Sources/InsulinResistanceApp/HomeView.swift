@@ -28,16 +28,18 @@ struct HomeView: View {
 
                 SectionCard {
                     VStack(alignment: .leading, spacing: 24) {
-                        Text(store.checkIn.isCompleted ? "Today's Check-in Complete" : "Today's Check-in")
+                        Text(checkInTitle)
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(AppColor.ink)
-                        Text(store.checkIn.isCompleted ? "You finished today's check-in. Review what you logged and the feedback generated from it." : "Log today's sleep, activity, movement breaks, and optional food journal.")
+                        Text(checkInDescription)
                             .font(.title3)
                             .foregroundStyle(AppColor.muted)
                             .lineSpacing(4)
-                        PrimaryButton(title: store.checkIn.isCompleted ? "View Today's Summary" : "Start Check-in") {
+                        PrimaryButton(title: checkInButtonTitle) {
                             if store.checkIn.isCompleted {
                                 store.viewTodaySummary()
+                            } else if store.hasStartedTodayCheckIn {
+                                store.resumeCheckIn()
                             } else {
                                 store.startCheckIn()
                             }
@@ -78,6 +80,36 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.white)
+    }
+
+    private var checkInTitle: String {
+        if store.checkIn.isCompleted {
+            return "Today's Check-in Complete"
+        }
+        if store.hasStartedTodayCheckIn {
+            return "Continue Today's Check-in"
+        }
+        return "Today's Check-in"
+    }
+
+    private var checkInDescription: String {
+        if store.checkIn.isCompleted {
+            return "You finished today's check-in. Review what you logged and the feedback generated from it."
+        }
+        if store.hasStartedTodayCheckIn {
+            return "Your answers are saved. Continue with the items still needed for today's feedback."
+        }
+        return "Log today's sleep, activity, movement breaks, and optional food journal."
+    }
+
+    private var checkInButtonTitle: String {
+        if store.checkIn.isCompleted {
+            return "View Today's Summary"
+        }
+        if store.hasStartedTodayCheckIn {
+            return "Continue Check-in"
+        }
+        return "Start Check-in"
     }
 }
 

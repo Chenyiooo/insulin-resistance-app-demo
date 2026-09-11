@@ -63,11 +63,20 @@ struct ManualCheckInView: View {
             .presentationDetents([.medium, .large])
         }
         .alert("Required answer missing", isPresented: $isShowingMissingDataWarning) {
+            Button("Go to first missing") {
+                navigateToFirstMissingItem()
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text(missingDataMessage)
         }
         .onAppear {
+            if let requestedField = store.requestedCheckInField {
+                step = stepForMissingField(requestedField)
+                store.requestedCheckInField = nil
+            } else if !store.checkIn.isCompleted, let firstMissing = store.checkInMissingDataItems().first {
+                step = stepForMissingField(firstMissing.field)
+            }
             foodJournalDescriptionDraft = store.checkIn.foodJournalDescription
             isFoodJournalDescriptionVisible = !store.checkIn.foodJournalDescription
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,6 +110,30 @@ struct ManualCheckInView: View {
         } else {
             isShowingMissingDataWarning = true
         }
+    }
+
+    private func navigateToFirstMissingItem() {
+        if let firstMissing = missingItems.first {
+            step = stepForMissingField(firstMissing.field)
+        }
+    }
+
+    private func stepForMissingField(_ field: String) -> Int {
+        let stage: Int
+        switch field {
+        case "weight", "waist_circumference", "systolic_bp", "diastolic_bp", "blood_pressure_date":
+            stage = 1
+        case "sleep_hours":
+            stage = 2
+        case "physical_activity_today", "activity_type", "activity_duration":
+            stage = 3
+        case "movement_breaks", "daily_reflection":
+            stage = 4
+        default:
+            stage = 2
+        }
+        let targetStep = store.shouldShowWeeklyCheckIn ? stage : max(stage - 1, 1)
+        return min(max(targetStep, 1), totalSteps)
     }
 
     private func currentStepMissingDataItems() -> [MissingDataItem] {

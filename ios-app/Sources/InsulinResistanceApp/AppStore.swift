@@ -85,6 +85,7 @@ final class AppStore: ObservableObject {
     @Published var hasAcceptedPrivacyTerms = false
     @Published var checkInSource = "manual_entry"
     @Published var checkInProvenance: [String: String] = [:]
+    @Published var requestedCheckInField: String?
     private var hasLoadedPersistedData = false
     private let riskPredictionAPI = RiskPredictionAPI()
     private let nutritionEstimateAPI = NutritionEstimateAPI()
@@ -103,6 +104,28 @@ final class AppStore: ObservableObject {
 
     var canGenerateDailyFeedback: Bool {
         profileMissingDataItems().isEmpty && checkInMissingDataItems().isEmpty
+    }
+
+    var missingRequiredItems: [MissingDataItem] {
+        profileMissingDataItems() + checkInMissingDataItems()
+    }
+
+    var hasMissingRequiredData: Bool {
+        !missingRequiredItems.isEmpty
+    }
+
+    var hasStartedTodayCheckIn: Bool {
+        !checkIn.sleepHours.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || checkIn.activeToday != nil
+            || !checkIn.activityType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !checkIn.activityDuration.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !checkIn.movementBreaks.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !checkIn.dailyReflection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !checkIn.weight.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !checkIn.waist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || checkIn.hasRecentBloodPressure
+            || !checkIn.foodJournal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || checkIn.foodPhotoCount > 0
     }
 
     var featureFlags: [String: Int] {
@@ -135,6 +158,24 @@ final class AppStore: ObservableObject {
     func startCheckIn() {
         selectedTab = .log
         screen = .checkInEntry
+    }
+
+    func openManualCheckIn(focusedField: String? = nil) {
+        selectedTab = .log
+        requestedCheckInField = focusedField
+        screen = .manualCheckIn
+    }
+
+    func resumeCheckIn() {
+        openManualCheckIn(focusedField: checkInMissingDataItems().first?.field)
+    }
+
+    func completeMissingRequiredInput() {
+        if !profileMissingDataItems().isEmpty {
+            showMain(tab: .profile)
+            return
+        }
+        resumeCheckIn()
     }
 
     func viewTodaySummary() {
@@ -577,8 +618,6 @@ final class AppStore: ObservableObject {
         }
         if profile.raceEthnicity.isEmpty {
             items.append(MissingDataItem(field: "race_ethnicity", label: "Race and ethnicity", code: MissingDataCode.missing))
-        } else if profile.raceEthnicity.contains("Prefer not to answer") {
-            items.append(MissingDataItem(field: "race_ethnicity", label: "Race and ethnicity", code: MissingDataCode.preferNotToAnswer))
         }
         addRequiredString(&items, field: "height_feet", label: "Height feet", value: profile.heightFeet)
         addRequiredString(&items, field: "height_inches", label: "Height inches", value: profile.heightInches)
@@ -624,10 +663,6 @@ final class AppStore: ObservableObject {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             items.append(MissingDataItem(field: field, label: label, code: MissingDataCode.missing))
-        } else if trimmed == "Prefer not to answer" {
-            items.append(MissingDataItem(field: field, label: label, code: MissingDataCode.preferNotToAnswer))
-        } else if trimmed == "Not sure" {
-            items.append(MissingDataItem(field: field, label: label, code: MissingDataCode.notSure))
         }
     }
 

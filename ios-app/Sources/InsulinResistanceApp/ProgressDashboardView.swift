@@ -21,7 +21,12 @@ struct ProgressDashboardView: View {
                     .pickerStyle(.segmented)
 
                     if selectedSegment == 0 {
-                        PredictionStatusBanner(mode: store.riskPredictionMode)
+                        PredictionStatusBanner(
+                            mode: store.riskPredictionMode,
+                            actionTitle: store.hasMissingRequiredData ? "Complete missing info" : nil
+                        ) {
+                            store.completeMissingRequiredInput()
+                        }
                     }
 
                     if selectedSegment == 0 {
@@ -41,6 +46,8 @@ struct ProgressDashboardView: View {
 
 struct PredictionStatusBanner: View {
     let mode: RiskPredictionMode
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -59,6 +66,11 @@ struct PredictionStatusBanner: View {
                 }
             }
             Spacer()
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(color)
+            }
         }
         .padding(12)
         .background(color.opacity(0.08))
@@ -242,7 +254,12 @@ struct WeeklyRiskView: View {
 
     private var weeklyRiskContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            PredictionStatusBanner(mode: store.riskPredictionMode)
+            PredictionStatusBanner(
+                mode: store.riskPredictionMode,
+                actionTitle: store.hasMissingRequiredData ? "Complete missing info" : nil
+            ) {
+                store.completeMissingRequiredInput()
+            }
 
             SectionCard {
                 VStack(alignment: .leading, spacing: 18) {
