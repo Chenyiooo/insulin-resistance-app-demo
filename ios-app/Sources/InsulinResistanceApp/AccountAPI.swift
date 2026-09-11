@@ -90,7 +90,7 @@ struct AccountAPI {
         _ = try await validatedData(for: request)
     }
 
-    func fetchLatestCheckIn(token: String) async throws -> DailyCheckIn? {
+    func fetchLatestCheckIn(token: String) async throws -> CheckInEnvelope<DailyCheckIn>? {
         let request = authorizedRequest(path: "me/checkins/latest", token: token)
         let (data, response) = try await responseData(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -100,7 +100,7 @@ struct AccountAPI {
             if data.isEmpty || String(data: data, encoding: .utf8) == "null" {
                 return nil
             }
-            return try JSONDecoder().decode(CheckInEnvelope<DailyCheckIn>.self, from: data).data
+            return try JSONDecoder().decode(CheckInEnvelope<DailyCheckIn>.self, from: data)
         }
         throw decodeServerError(data: data, statusCode: httpResponse.statusCode)
     }

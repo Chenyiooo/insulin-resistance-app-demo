@@ -1,3 +1,9 @@
+databases:
+  - name: insulin-resistance-db
+    plan: free
+    databaseName: insulin_resistance
+    user: insulin_resistance
+
 services:
   - type: web
     name: insulin-resistance-api
@@ -9,8 +15,10 @@ services:
         value: production
       - key: IR_API_VERSION
         value: 0.2.0
-      - key: IR_APP_DB_PATH
-        value: /tmp/app.db
+      - key: DATABASE_URL
+        fromDatabase:
+          name: insulin-resistance-db
+          property: connectionString
       - key: IR_MODEL_PATH
         value: /app/backend/model_artifacts/reduced_lightgbm_bundle.joblib
       - key: IR_ALLOWED_ORIGINS

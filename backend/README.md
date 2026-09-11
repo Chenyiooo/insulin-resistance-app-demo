@@ -218,7 +218,7 @@ Loads the latest saved check-in.
 
 ## Development Database
 
-By default the API stores account and app data in:
+By default the API stores account and app data in local SQLite:
 
 ```text
 backend/app.db
@@ -226,9 +226,9 @@ backend/app.db
 
 This is a local SQLite development database that behaves like the cloud database from the app's point of view. It is ignored by Git.
 
-For the free Render demo, `IR_APP_DB_PATH` is set to `/tmp/app.db`. This avoids paid persistent disk setup, but data can be lost when the service restarts or redeploys.
+For deployed builds, set `DATABASE_URL` or `IR_DATABASE_URL` to a Postgres connection string. When this variable is present, the same account, profile, check-in, audit, export, and delete endpoints use Postgres instead of SQLite.
 
-For a larger production rollout, replace SQLite with a managed Postgres database and keep the same endpoint contracts.
+The Render Blueprint in this repo creates a managed Postgres database and injects its connection string into the API as `DATABASE_URL`, so TestFlight users keep their account data after service restarts and redeploys.
 
 ## Deployment
 
@@ -243,11 +243,13 @@ Important environment variables:
 ```bash
 export IR_ENV=production
 export IR_API_VERSION=0.2.0
-export IR_APP_DB_PATH=/tmp/app.db
+export DATABASE_URL="postgresql://user:password@host:5432/database"
 export IR_MODEL_PATH=/app/backend/model_artifacts/reduced_lightgbm_bundle.joblib
 export IR_ALLOWED_ORIGINS="https://your-app.example.com"
 export IR_ENABLE_DOCS=false
 ```
+
+Leave `DATABASE_URL` unset for local development if you want to use SQLite. You can optionally set `IR_APP_DB_PATH` to choose a different local SQLite file.
 
 The demo deployment model is stored at `backend/model_artifacts/reduced_lightgbm_bundle.joblib` so Git-backed cloud builds can include it in the Docker image. If you replace the model later, update that artifact or set `IR_MODEL_PATH` to another runtime path.
 
@@ -255,7 +257,7 @@ Run production-style locally:
 
 ```bash
 IR_ENV=production \
-IR_APP_DB_PATH=/tmp/ir-prod-demo.db \
+DATABASE_URL="postgresql://user:password@localhost:5432/insulin_resistance" \
 IR_ENABLE_DOCS=false \
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
@@ -285,11 +287,11 @@ Configuration:
 ```bash
 export IR_ALLOWED_ORIGINS="http://127.0.0.1:8000,http://localhost:8000"
 export IR_MAX_BODY_BYTES=5242880
-export IR_APP_DB_PATH="/path/to/app.db"
+export DATABASE_URL="postgresql://user:password@host:5432/database"
 export IR_MODEL_PATH="/path/to/reduced_lightgbm_bundle.joblib"
 ```
 
-Deployment still needs platform-specific operations: HTTPS domain setup, managed database backups if you move beyond SQLite, server-side secret management, environment-specific CORS values, database encryption policies, and formal privacy/compliance review.
+Deployment still needs platform-specific operations: HTTPS domain setup, managed database backups, server-side secret management, environment-specific CORS values, database encryption policies, and formal privacy/compliance review.
 
 ## Important Notes
 

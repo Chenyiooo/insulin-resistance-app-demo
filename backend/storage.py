@@ -13,6 +13,13 @@ from typing import Any
 
 from backend.config import settings
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:  # pragma: no cover - exercised only when DATABASE_URL is configured.
+    psycopg = None
+    dict_row = None
+
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -20,7 +27,13 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def connect() -> sqlite3.Connection:
+def connect() -> Any:
+    database_url = _database_url()
+    if database_url:
+        if psycopg is None or dict_row is None:
+            raise RuntimeError("DATABASE_URL is configured, but psycopg is not installed.")
+        return psycopg.connect(database_url, row_factory=dict_row)
+
     db_path = settings.db_path
     if "IR_APP_DB_PATH" in os.environ:
         db_path = type(settings.db_path)(os.environ["IR_APP_DB_PATH"])
@@ -33,82 +46,30 @@ def connect() -> sqlite3.Connection:
 
 def init_db() -> None:
     with connect() as conn:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                name TEXT NOT NULL DEFAULT '',
-                password_hash TEXT NOT NULL,
-                salt TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS sessions (
-                token_hash TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS profiles (
-                user_id TEXT PRIMARY KEY,
-                data_json TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS checkins (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                checkin_date TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'manual_entry',
-                provenance_json TEXT,
-                data_json TEXT NOT NULL,
-                model_payload_json TEXT,
-                risk_result_json TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_checkins_user_date
-            ON checkins(user_id, checkin_date DESC);
-
-            CREATE TABLE IF NOT EXISTS audit_events (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                event_type TEXT NOT NULL,
-                metadata_json TEXT,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_audit_events_user_created
-            ON audit_events(user_id, created_at DESC);
-            """
-        )
+        for statement in _schema_statements():
+            conn.execute(statement)
         _ensure_column(conn, "checkins", "source", "TEXT NOT NULL DEFAULT 'manual_entry'")
         _ensure_column(conn, "checkins", "provenance_json", "TEXT")
         cleanup_expired_sessions(conn)
 
 
 def readiness() -> dict[str, Any]:
+    database_kind = _database_kind()
     try:
         with connect() as conn:
             user_count = conn.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
             checkin_count = conn.execute("SELECT COUNT(*) AS count FROM checkins").fetchone()["count"]
-        return {
+        ready = {
             "ok": True,
-            "database": "sqlite",
-            "db_path": os.environ.get("IR_APP_DB_PATH", str(settings.db_path)),
+            "database": database_kind,
             "user_count": user_count,
             "checkin_count": checkin_count,
         }
-    except sqlite3.Error as exc:
-        return {"ok": False, "database": "sqlite", "error": str(exc)}
+        if database_kind == "sqlite":
+            ready["db_path"] = os.environ.get("IR_APP_DB_PATH", str(settings.db_path))
+        return ready
+    except Exception as exc:
+        return {"ok": False, "database": database_kind, "error": str(exc)}
 
 
 def create_user(email: str, password: str, name: str = "") -> dict[str, Any]:
@@ -125,14 +86,17 @@ def create_user(email: str, password: str, name: str = "") -> dict[str, Any]:
 
     try:
         with connect() as conn:
-            conn.execute(
+            _execute(
+                conn,
                 """
                 INSERT INTO users (id, email, name, password_hash, salt, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (user_id, normalized_email, name.strip(), password_hash, salt, now, now),
             )
-    except sqlite3.IntegrityError as exc:
+    except Exception as exc:
+        if not _is_integrity_error(exc):
+            raise
         raise ValueError("An account with this email already exists.") from exc
 
     return get_user_by_id(user_id)
@@ -140,7 +104,8 @@ def create_user(email: str, password: str, name: str = "") -> dict[str, Any]:
 
 def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
     with connect() as conn:
-        row = conn.execute(
+        row = _execute(
+            conn,
             "SELECT * FROM users WHERE email = ?",
             (_normalize_email(email),),
         ).fetchone()
@@ -159,7 +124,8 @@ def create_session(user_id: str) -> str:
     expires_at = (now_dt + timedelta(days=settings.session_days)).isoformat()
 
     with connect() as conn:
-        conn.execute(
+        _execute(
+            conn,
             """
             INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
             VALUES (?, ?, ?, ?)
@@ -171,14 +137,15 @@ def create_session(user_id: str) -> str:
 
 def delete_session(token: str) -> None:
     with connect() as conn:
-        conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_hash_token(token),))
+        _execute(conn, "DELETE FROM sessions WHERE token_hash = ?", (_hash_token(token),))
 
 
 def get_user_for_token(token: str) -> dict[str, Any] | None:
     now = utc_now()
     with connect() as conn:
         cleanup_expired_sessions(conn)
-        row = conn.execute(
+        row = _execute(
+            conn,
             """
             SELECT users.*
             FROM sessions
@@ -194,7 +161,7 @@ def get_user_for_token(token: str) -> dict[str, Any] | None:
 
 def get_user_by_id(user_id: str) -> dict[str, Any]:
     with connect() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = _execute(conn, "SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if row is None:
         raise ValueError("User not found.")
     return _user_from_row(row)
@@ -203,7 +170,8 @@ def get_user_by_id(user_id: str) -> dict[str, Any]:
 def save_profile(user_id: str, data: dict[str, Any]) -> dict[str, Any]:
     now = utc_now()
     with connect() as conn:
-        conn.execute(
+        _execute(
+            conn,
             """
             INSERT INTO profiles (user_id, data_json, updated_at)
             VALUES (?, ?, ?)
@@ -218,7 +186,8 @@ def save_profile(user_id: str, data: dict[str, Any]) -> dict[str, Any]:
 
 def get_profile(user_id: str) -> dict[str, Any] | None:
     with connect() as conn:
-        row = conn.execute(
+        row = _execute(
+            conn,
             "SELECT data_json, updated_at FROM profiles WHERE user_id = ?",
             (user_id,),
         ).fetchone()
@@ -240,7 +209,8 @@ def save_checkin(
     checkin_id = str(uuid.uuid4())
     normalized_source = _normalize_source(source)
     with connect() as conn:
-        conn.execute(
+        _execute(
+            conn,
             """
             INSERT INTO checkins (
                 id, user_id, checkin_date, source, provenance_json, data_json,
@@ -276,7 +246,8 @@ def save_checkin(
 
 def list_checkins(user_id: str, limit: int = 30) -> list[dict[str, Any]]:
     with connect() as conn:
-        rows = conn.execute(
+        rows = _execute(
+            conn,
             """
             SELECT * FROM checkins
             WHERE user_id = ?
@@ -306,13 +277,14 @@ def export_user_data(user_id: str) -> dict[str, Any]:
 
 def delete_user(user_id: str) -> None:
     with connect() as conn:
-        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        _execute(conn, "DELETE FROM users WHERE id = ?", (user_id,))
 
 
 def log_event(user_id: str | None, event_type: str, metadata: dict[str, Any] | None = None) -> None:
     metadata = _scrub_metadata(metadata or {})
     with connect() as conn:
-        conn.execute(
+        _execute(
+            conn,
             """
             INSERT INTO audit_events (id, user_id, event_type, metadata_json, created_at)
             VALUES (?, ?, ?, ?, ?)
@@ -329,7 +301,8 @@ def log_event(user_id: str | None, event_type: str, metadata: dict[str, Any] | N
 
 def list_audit_events(user_id: str, limit: int = 100) -> list[dict[str, Any]]:
     with connect() as conn:
-        rows = conn.execute(
+        rows = _execute(
+            conn,
             """
             SELECT * FROM audit_events
             WHERE user_id = ?
@@ -341,9 +314,9 @@ def list_audit_events(user_id: str, limit: int = 100) -> list[dict[str, Any]]:
     return [_audit_event_from_row(row) for row in rows]
 
 
-def cleanup_expired_sessions(conn: sqlite3.Connection | None = None) -> None:
+def cleanup_expired_sessions(conn: Any | None = None) -> None:
     if conn is not None:
-        conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (utc_now(),))
+        _execute(conn, "DELETE FROM sessions WHERE expires_at <= ?", (utc_now(),))
         return
     with connect() as owned_conn:
         cleanup_expired_sessions(owned_conn)
@@ -369,11 +342,110 @@ def _scrub_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+def _database_url() -> str | None:
+    return os.environ.get("DATABASE_URL") or os.environ.get("IR_DATABASE_URL") or settings.database_url
+
+
+def _database_kind() -> str:
+    return "postgres" if _database_url() else "sqlite"
+
+
+def _uses_postgres() -> bool:
+    return _database_kind() == "postgres"
+
+
+def _execute(conn: Any, sql: str, params: tuple[Any, ...] = ()) -> Any:
+    return conn.execute(_prepare_sql(sql), params)
+
+
+def _prepare_sql(sql: str) -> str:
+    if not _uses_postgres():
+        return sql
+    return sql.replace("?", "%s")
+
+
+def _schema_statements() -> list[str]:
+    return [
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL DEFAULT '',
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            token_hash TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS profiles (
+            user_id TEXT PRIMARY KEY,
+            data_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS checkins (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            checkin_date TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'manual_entry',
+            provenance_json TEXT,
+            data_json TEXT NOT NULL,
+            model_payload_json TEXT,
+            risk_result_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_checkins_user_date
+        ON checkins(user_id, checkin_date DESC)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS audit_events (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            event_type TEXT NOT NULL,
+            metadata_json TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_audit_events_user_created
+        ON audit_events(user_id, created_at DESC)
+        """,
+    ]
+
+
+def _ensure_column(conn: Any, table: str, column: str, definition: str) -> None:
+    if _uses_postgres():
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}")
+        return
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     if any(row["name"] == column for row in rows):
         return
     conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _is_integrity_error(exc: Exception) -> bool:
+    if isinstance(exc, sqlite3.IntegrityError):
+        return True
+    if psycopg is not None and isinstance(exc, psycopg.IntegrityError):
+        return True
+    return False
 
 
 def _hash_password(password: str, salt: str) -> str:
@@ -390,7 +462,7 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _user_from_row(row: sqlite3.Row) -> dict[str, Any]:
+def _user_from_row(row: Any) -> dict[str, Any]:
     return {
         "id": row["id"],
         "email": row["email"],
@@ -400,7 +472,7 @@ def _user_from_row(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def _checkin_from_row(row: sqlite3.Row) -> dict[str, Any]:
+def _checkin_from_row(row: Any) -> dict[str, Any]:
     return {
         "id": row["id"],
         "checkin_date": row["checkin_date"],
@@ -414,7 +486,7 @@ def _checkin_from_row(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def _audit_event_from_row(row: sqlite3.Row) -> dict[str, Any]:
+def _audit_event_from_row(row: Any) -> dict[str, Any]:
     return {
         "id": row["id"],
         "user_id": row["user_id"],

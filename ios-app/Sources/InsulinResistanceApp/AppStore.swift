@@ -192,56 +192,38 @@ final class AppStore: ObservableObject {
         screen = .completion
     }
 
-    func loadPersistedDataIfNeeded(profile: StoredUserProfile?) {
-        guard !hasLoadedPersistedData else { return }
-        if let profile {
-            self.profile = profile.userProfile
-        }
-        resetDailyCheckInForNewSession()
-        normalizeFoodJournalStatus()
-        refreshLocalRiskAndInsights()
-        hasLoadedPersistedData = true
-    }
-
     func loadPersistedDataIfNeeded(from context: ModelContext) {
         guard !hasLoadedPersistedData else { return }
         let profileDescriptor = FetchDescriptor<StoredUserProfile>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         let profile = try? context.fetch(profileDescriptor).first
-        clearStoredDailyCheckIns(in: context)
-        loadPersistedDataIfNeeded(profile: profile)
+        if let profile {
+            self.profile = profile.userProfile
+        }
+        if let todayCheckIn = loadStoredCheckInForToday(from: context) {
+            checkIn = todayCheckIn.dailyCheckIn
+        } else {
+            resetDailyCheckInForNewSession()
+        }
+        normalizeFoodJournalStatus()
+        refreshLocalRiskAndInsights()
+        hasLoadedPersistedData = true
+        if authToken != nil {
+            Task {
+                await loadCloudData(persistingIn: context)
+            }
+        }
     }
 
     func saveProfile(in context: ModelContext) {
-        let missingItems = profileMissingDataItems()
-        let descriptor = FetchDescriptor<StoredUserProfile>(
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-        if let existing = try? context.fetch(descriptor).first {
-            existing.update(from: profile, missingItems: missingItems)
-        } else {
-            context.insert(StoredUserProfile(profile: profile, missingItems: missingItems))
-        }
-        try? context.save()
+        upsertProfile(profile, in: context)
         refreshFeedbackIfReady()
         syncProfileToCloud()
     }
 
     func saveCheckIn(in context: ModelContext) {
-        let missingItems = checkInMissingDataItems()
-        let startOfToday = Calendar.current.startOfDay(for: Date())
-        let descriptor = FetchDescriptor<StoredDailyCheckIn>(
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-        let existing = (try? context.fetch(descriptor))?
-            .first { Calendar.current.isDate($0.checkInDate, inSameDayAs: startOfToday) }
-        if let existing {
-            existing.update(from: checkIn, missingItems: missingItems)
-        } else {
-            context.insert(StoredDailyCheckIn(checkIn: checkIn, missingItems: missingItems))
-        }
-        try? context.save()
+        upsertCheckIn(checkIn, in: context)
         refreshFeedbackIfReady()
     }
 
@@ -283,11 +265,40 @@ final class AppStore: ObservableObject {
         isEstimatingNutrition = false
     }
 
-    private func clearStoredDailyCheckIns(in context: ModelContext) {
-        let descriptor = FetchDescriptor<StoredDailyCheckIn>()
-        guard let savedCheckIns = try? context.fetch(descriptor) else { return }
-        for savedCheckIn in savedCheckIns {
-            context.delete(savedCheckIn)
+    private func loadStoredCheckInForToday(from context: ModelContext) -> StoredDailyCheckIn? {
+        let descriptor = FetchDescriptor<StoredDailyCheckIn>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        return (try? context.fetch(descriptor))?
+            .first { Calendar.current.isDate($0.checkInDate, inSameDayAs: startOfToday) }
+    }
+
+    private func upsertProfile(_ profile: UserProfile, in context: ModelContext) {
+        let missingItems = profileMissingDataItems()
+        let descriptor = FetchDescriptor<StoredUserProfile>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        if let existing = try? context.fetch(descriptor).first {
+            existing.update(from: profile, missingItems: missingItems)
+        } else {
+            context.insert(StoredUserProfile(profile: profile, missingItems: missingItems))
+        }
+        try? context.save()
+    }
+
+    private func upsertCheckIn(_ checkIn: DailyCheckIn, in context: ModelContext) {
+        let missingItems = checkInMissingDataItems()
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let descriptor = FetchDescriptor<StoredDailyCheckIn>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        let existing = (try? context.fetch(descriptor))?
+            .first { Calendar.current.isDate($0.checkInDate, inSameDayAs: startOfToday) }
+        if let existing {
+            existing.update(from: checkIn, missingItems: missingItems)
+        } else {
+            context.insert(StoredDailyCheckIn(checkIn: checkIn, missingItems: missingItems))
         }
         try? context.save()
     }
@@ -540,16 +551,23 @@ final class AppStore: ObservableObject {
         }
     }
 
-    private func loadCloudData() async {
+    private func loadCloudData(persistingIn context: ModelContext? = nil) async {
         guard let authToken else { return }
         isCloudSyncing = true
         do {
             if let cloudProfile = try await accountAPI.fetchProfile(token: authToken) {
                 profile = cloudProfile
+                if let context {
+                    upsertProfile(cloudProfile, in: context)
+                }
             }
-            if let cloudCheckIn = try await accountAPI.fetchLatestCheckIn(token: authToken) {
-                checkIn = cloudCheckIn
+            if let cloudCheckIn = try await accountAPI.fetchLatestCheckIn(token: authToken),
+               cloudCheckIn.checkInDate == nil || cloudCheckIn.checkInDate == Self.todayString() {
+                checkIn = cloudCheckIn.data
                 normalizeFoodJournalStatus()
+                if let context {
+                    upsertCheckIn(checkIn, in: context)
+                }
             }
             refreshFeedbackIfReady()
             cloudSyncMessage = "Cloud data loaded."
@@ -718,6 +736,14 @@ final class AppStore: ObservableObject {
     }()
 
     private static let isoDateFormatter = ISO8601DateFormatter()
+
+    private static func todayString() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
 
     private func iconName(for domain: String) -> String {
         switch domain {

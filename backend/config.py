@@ -20,6 +20,7 @@ def _bool_env(name: str, default: bool = False) -> bool:
 class Settings:
     environment: str = os.environ.get("IR_ENV", "development")
     api_version: str = os.environ.get("IR_API_VERSION", "0.2.0")
+    database_url: str | None = os.environ.get("DATABASE_URL") or os.environ.get("IR_DATABASE_URL")
     db_path: Path = Path(os.environ.get("IR_APP_DB_PATH", REPO_ROOT / "backend" / "app.db"))
     model_path: Path = Path(os.environ.get("IR_MODEL_PATH", DEFAULT_MODEL_PATH))
     allowed_origins: tuple[str, ...] = tuple(
