@@ -75,6 +75,41 @@ private enum AIQuestionStep: Hashable {
     }
 }
 
+private struct AIChatMessage: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    let isUser: Bool
+}
+
+private struct AIChatBubble: View {
+    let message: AIChatMessage
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            if message.isUser {
+                Spacer(minLength: 48)
+                bubble
+            } else {
+                CloudyMascotView(size: 48)
+                bubble
+                Spacer(minLength: 48)
+            }
+        }
+    }
+
+    private var bubble: some View {
+        Text(message.text)
+            .font(.body)
+            .foregroundStyle(message.isUser ? .white : AppColor.text)
+            .lineSpacing(4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(message.isUser ? AppColor.blue : AppColor.softViolet)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 struct AICheckInView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.modelContext) private var modelContext
@@ -88,6 +123,8 @@ struct AICheckInView: View {
     @State private var foodPhotoBase64: [String] = []
     @State private var isFoodDescriptionVisible = false
     @State private var foodDescriptionDraft = ""
+    @State private var chatMessages: [AIChatMessage] = []
+    @State private var isReviewingSummary = false
     private var greetingName: String {
         let trimmedName = store.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedName.isEmpty ? "there" : trimmedName
@@ -135,95 +172,74 @@ struct AICheckInView: View {
             progressHeader
             topActions
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    HStack(alignment: .top, spacing: 16) {
-                        CloudyMascotView(size: 104)
-                        Text(cloudyMessage)
-                            .font(.title3)
-                            .foregroundStyle(AppColor.text)
-                            .lineSpacing(6)
-                            .padding(22)
-                            .background(AppColor.softViolet)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .padding(.top, 34)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 14) {
+                        ForEach(chatMessages) { message in
+                            AIChatBubble(message: message)
+                                .id(message.id)
+                        }
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(step.title)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(AppColor.blue)
-                        Text(step.prompt)
-                            .font(.title2.bold())
-                            .foregroundStyle(AppColor.text)
-                            .lineSpacing(8)
-                    }
-                    .padding(24)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppColor.softViolet)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                        if !isReviewingSummary && !quickReplies.isEmpty {
+                            quickReplyRow
+                        }
 
-                    if !optionButtons.isEmpty {
-                        Text(optionHint)
-                            .font(.callout)
-                            .foregroundStyle(AppColor.muted)
-
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                            ForEach(optionButtons, id: \.self) { option in
-                                Button {
-                                    choose(option)
-                                } label: {
-                                    Text(option)
-                                        .font(.headline)
-                                        .foregroundStyle(AppColor.text)
-                                        .multilineTextAlignment(.center)
-                                        .minimumScaleFactor(0.85)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 76)
-                                        .background(selectedOption == option ? Color.blue.opacity(0.12) : .white)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.45)))
-                                }
-                                .buttonStyle(.plain)
-                            }
+                        if !isReviewingSummary && step == .food {
+                            foodJournalPanel
                         }
                     }
-
-                    if step == .food {
-                        foodJournalPanel
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+                }
+                .onChange(of: chatMessages) { _, newValue in
+                    guard let lastMessage = newValue.last else { return }
+                    withAnimation {
+                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
                     }
                 }
-                .padding(.horizontal, 28)
-                .padding(.bottom, 20)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack(spacing: 14) {
-                if canMoveBack {
+                if isReviewingSummary {
+                    OutlineButton(title: "Back") {
+                        isReviewingSummary = false
+                        move(to: .reflection)
+                    }
+                    PrimaryButton(title: "Submit Check-in") {
+                        submitReviewedCheckIn()
+                    }
+                } else {
+                    if canMoveBack {
+                        Button {
+                            moveToPreviousStep()
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
+                                .font(.headline)
+                                .foregroundStyle(AppColor.blue)
+                                .frame(width: 92, height: 56)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.blue, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    TextField(textPlaceholder, text: $typedAnswer, axis: .vertical)
+                        .lineLimit(1...4)
+                        .textFieldStyle(AppTextFieldStyle())
+                        .onSubmit {
+                            submitTypedAnswer()
+                        }
                     Button {
-                        moveToPreviousStep()
+                        submitTypedAnswer()
                     } label: {
-                        Label("Back", systemImage: "chevron.left")
-                            .font(.headline)
-                            .foregroundStyle(AppColor.blue)
-                            .frame(width: 92, height: 56)
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.blue, lineWidth: 2))
+                        Image(systemName: step == .reflection ? "checkmark" : "paperplane.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .frame(width: 64, height: 64)
+                            .background(AppColor.blue)
+                            .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
                 }
-                TextField(textPlaceholder, text: $typedAnswer)
-                    .textFieldStyle(AppTextFieldStyle())
-                Button {
-                    submitTypedAnswer()
-                } label: {
-                    Image(systemName: step == .reflection ? "checkmark" : "paperplane.fill")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .frame(width: 64, height: 64)
-                        .background(AppColor.blue)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 18)
@@ -242,14 +258,6 @@ struct AICheckInView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .alert("Required answer missing", isPresented: $isShowingMissingDataWarning) {
-            Button("Go to first missing") {
-                navigateToFirstMissingItem()
-            }
-            Button("Review", role: .cancel) {}
-        } message: {
-            Text(missingDataMessage)
-        }
         .onAppear {
             if let requestedField = store.requestedCheckInField {
                 move(to: stepForMissingField(requestedField))
@@ -263,6 +271,7 @@ struct AICheckInView: View {
             isFoodDescriptionVisible = !store.checkIn.foodJournalDescription
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty
+            initializeConversationIfNeeded()
         }
     }
 
@@ -287,12 +296,6 @@ struct AICheckInView: View {
         default:
             return "Got it. Let’s keep going."
         }
-    }
-
-    private var optionHint: String {
-        step == .food || step == .reflection || step == .weight || step == .waist || step == .bloodPressureDate
-            ? "Choose an option or type your own answer."
-            : "Choose an option or tell me in your own words."
     }
 
     private var textPlaceholder: String {
@@ -326,39 +329,212 @@ struct AICheckInView: View {
         }
     }
 
-    private var optionButtons: [String] {
+    private var quickReplies: [String] {
         switch step {
-        case .weight, .waist, .bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate:
-            return []
         case .bloodPressureChoice:
             return ["I have a recent reading", "I don't have a recent reading"]
-        case .sleep:
-            return ["5 hr", "6 hr", "7 hr", "8 hr"]
         case .activity:
             return ["Yes", "No"]
-        case .activityType:
-            return ["Brisk walking", "Cycling", "Swimming", "Strength training", "Running", "Yoga or stretching", "Sports", "Other activity"]
-        case .activityDuration:
-            return ["10 min", "20 min", "30 min", "45 min"]
-        case .movement:
-            return [
-                "About once an hour or more",
-                "A few times during the day",
-                "Once",
-                "Not at all",
-                "I did not spend much time sitting today",
-            ]
         case .food:
-            return []
-        case .reflection:
+            return ["Skip food journal"]
+        default:
             return []
         }
     }
 
-    private var missingDataMessage: String {
-        if missingItems.isEmpty { return "" }
-        let labels = missingItems.map { "\($0.label): \($0.code)" }.joined(separator: "\n")
-        return "Please answer before continuing.\n\n\(labels)"
+    private var quickReplyRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(quickReplies, id: \.self) { reply in
+                    Button {
+                        choose(reply)
+                    } label: {
+                        Text(reply)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColor.blue)
+                            .padding(.horizontal, 14)
+                            .frame(height: 38)
+                            .background(AppColor.sky)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func initializeConversationIfNeeded() {
+        guard chatMessages.isEmpty else { return }
+        appendAssistant(questionMessage(for: step))
+    }
+
+    private func appendAssistant(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if chatMessages.last?.text == trimmed && chatMessages.last?.isUser == false {
+            return
+        }
+        chatMessages.append(AIChatMessage(text: trimmed, isUser: false))
+    }
+
+    private func appendUser(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        chatMessages.append(AIChatMessage(text: trimmed, isUser: true))
+    }
+
+    private func questionMessage(for targetStep: AIQuestionStep) -> String {
+        switch targetStep {
+        case .weight:
+            return "Hi \(greetingName), let's do today's check-in together. What's your current weight?"
+        case .waist:
+            return "What's your waist circumference?"
+        case .bloodPressureChoice:
+            return "Do you have a recent blood pressure reading you want to include? You can say yes or no."
+        case .bloodPressureSystolic:
+            return "What was the systolic number?"
+        case .bloodPressureDiastolic:
+            return "What was the diastolic number?"
+        case .bloodPressureDate:
+            return "When was that blood pressure reading measured?"
+        case .sleep:
+            return "About how many hours did you sleep last night?"
+        case .activity:
+            return "Were you physically active today?"
+        case .activityType:
+            return "What kind of activity did you do?"
+        case .activityDuration:
+            return "About how many minutes did that activity last?"
+        case .movement:
+            return "When you were sitting today, how often did you stand up or walk for a few minutes?"
+        case .food:
+            return "Optional food journal: describe what you ate and drank, upload photos, or skip this part."
+        case .reflection:
+            return "Last one: what did you notice today about your routines, body, energy, food, sleep, or movement?"
+        }
+    }
+
+    private func clarifyingPrompt(for targetStep: AIQuestionStep) -> String {
+        switch targetStep {
+        case .weight:
+            return "Please include a number, like 165 lb or 75 kg."
+        case .waist:
+            return "Please include a number, like 34 in or 86 cm."
+        case .bloodPressureChoice:
+            return "Please answer yes or no."
+        case .bloodPressureSystolic:
+            return "Please enter the top blood pressure number, like 120."
+        case .bloodPressureDiastolic:
+            return "Please enter the bottom blood pressure number, like 80."
+        case .bloodPressureDate:
+            return "You can write something like today, yesterday, or Sep 10."
+        case .sleep:
+            return "Please include the number of hours, like 6.5 hours."
+        case .activity:
+            return "Please answer yes or no."
+        case .activityType:
+            return "A short phrase is enough, like walking, cycling, or strength training."
+        case .activityDuration:
+            return "Please include minutes, like 20 min."
+        case .movement:
+            return "You can say hourly, a few times, once, not at all, or not much sitting."
+        case .food:
+            return "You can describe the food or tap Skip food journal."
+        case .reflection:
+            return "A short sentence is enough."
+        }
+    }
+
+    private func fieldForStep(_ targetStep: AIQuestionStep) -> String {
+        switch targetStep {
+        case .weight:
+            return "weight"
+        case .waist:
+            return "waist_circumference"
+        case .bloodPressureChoice:
+            return "blood_pressure_optional_choice"
+        case .bloodPressureSystolic:
+            return "systolic_bp"
+        case .bloodPressureDiastolic:
+            return "diastolic_bp"
+        case .bloodPressureDate:
+            return "blood_pressure_date"
+        case .sleep:
+            return "sleep_hours"
+        case .activity:
+            return "physical_activity_today"
+        case .activityType:
+            return "activity_type"
+        case .activityDuration:
+            return "activity_duration"
+        case .movement:
+            return "movement_breaks"
+        case .food:
+            return "food_journal"
+        case .reflection:
+            return "daily_reflection"
+        }
+    }
+
+    private func applyCorrectionIfNeeded(_ answer: String) -> Bool {
+        let lowercased = answer.lowercased()
+        let soundsLikeCorrection = lowercased.contains("actually")
+            || lowercased.contains("change")
+            || lowercased.contains("update")
+            || lowercased.contains("edit")
+            || lowercased.contains("correct")
+        guard soundsLikeCorrection else {
+            return false
+        }
+
+        if lowercased.contains("sleep"), let hours = firstNumber(in: answer) {
+            store.checkIn.sleepHours = formatNumber(hours)
+            store.saveCheckIn(in: modelContext)
+            appendAssistant("Updated sleep to \(store.checkIn.sleepHours) hours. \(questionMessage(for: step))")
+            return true
+        }
+        if lowercased.contains("weight"), let weight = firstNumber(in: answer) {
+            store.checkIn.weight = formatNumber(weight)
+            store.checkIn.weightUnit = normalizedWeightUnit(from: answer)
+            store.saveCheckIn(in: modelContext)
+            appendAssistant("Updated weight to \(store.checkIn.weight) \(store.checkIn.weightUnit). \(questionMessage(for: step))")
+            return true
+        }
+        if lowercased.contains("waist"), let waist = firstNumber(in: answer) {
+            store.checkIn.waist = formatNumber(waist)
+            store.checkIn.waistUnit = normalizedWaistUnit(from: answer)
+            store.saveCheckIn(in: modelContext)
+            appendAssistant("Updated waist circumference to \(store.checkIn.waist) \(store.checkIn.waistUnit). \(questionMessage(for: step))")
+            return true
+        }
+        if lowercased.contains("activity") || lowercased.contains("exercise") || lowercased.contains("workout") {
+            if let minutes = firstNumber(in: answer) {
+                store.checkIn.activityDuration = "\(Int(minutes.rounded()))"
+            }
+            let normalized = normalizedActivityType(answer)
+            if normalized != answer
+                || lowercased.contains("walk")
+                || lowercased.contains("run")
+                || lowercased.contains("cycle")
+                || lowercased.contains("bike")
+                || lowercased.contains("swim")
+                || lowercased.contains("strength")
+                || lowercased.contains("yoga") {
+                store.checkIn.activeToday = true
+                store.checkIn.activityType = normalized
+            }
+            store.saveCheckIn(in: modelContext)
+            appendAssistant("Updated your activity. \(questionMessage(for: step))")
+            return true
+        }
+        if lowercased.contains("movement") || lowercased.contains("break") || lowercased.contains("sitting") {
+            store.checkIn.movementBreaks = normalizedMovementAnswer(answer)
+            store.saveCheckIn(in: modelContext)
+            appendAssistant("Updated movement breaks. \(questionMessage(for: step))")
+            return true
+        }
+        return false
     }
 
     private var foodJournalPanel: some View {
@@ -477,45 +653,55 @@ struct AICheckInView: View {
 
     private func choose(_ option: String) {
         selectedOption = option
+        appendUser(option)
         switch step {
         case .weight, .waist:
             return
         case .bloodPressureChoice:
             if option == "I have a recent reading" {
                 store.checkIn.hasRecentBloodPressure = true
+                appendAssistant("Got it. I'll collect the blood pressure numbers next.")
             } else {
                 store.checkIn.hasRecentBloodPressure = false
                 store.checkIn.systolic = ""
                 store.checkIn.diastolic = ""
                 store.checkIn.bloodPressureDate = ""
+                appendAssistant("No problem. I'll skip blood pressure for today.")
             }
             moveToNextStep()
         case .bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate:
             return
         case .sleep:
             store.checkIn.sleepHours = option.replacingOccurrences(of: " hr", with: "")
+            appendAssistant("Got it: \(store.checkIn.sleepHours) hours of sleep.")
             moveToNextStep()
         case .activity:
             if option == "Yes" {
                 store.checkIn.activeToday = true
+                appendAssistant("Great. What kind of activity did you do?")
             } else {
                 store.checkIn.activeToday = false
                 store.checkIn.activityType = ""
                 store.checkIn.activityDuration = ""
+                appendAssistant("Got it. I'll record no physical activity for today.")
             }
             moveToNextStep()
         case .activityType:
             store.checkIn.activityType = option
+            appendAssistant("Recorded: \(store.checkIn.activityType).")
             moveToNextStep()
         case .activityDuration:
             store.checkIn.activityDuration = option.replacingOccurrences(of: " min", with: "")
+            appendAssistant("Recorded: \(store.checkIn.activityDuration) minutes.")
             moveToNextStep()
         case .movement:
             store.checkIn.movementBreaks = option
+            appendAssistant("Thanks, I saved that movement-break answer.")
             moveToNextStep()
         case .food:
             if option == "Skip food journal" {
-                store.checkIn.foodJournal = "Skipped"
+                skipFoodJournal()
+                return
             }
             moveToNextStep()
         case .reflection:
@@ -525,6 +711,15 @@ struct AICheckInView: View {
 
     private func submitTypedAnswer() {
         let answer = typedAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else {
+            showMissing(field: fieldForStep(step), label: step.title)
+            return
+        }
+        appendUser(answer)
+        typedAnswer = ""
+        if applyCorrectionIfNeeded(answer) {
+            return
+        }
         switch step {
         case .weight:
             guard let weight = firstNumber(in: answer) else {
@@ -533,6 +728,7 @@ struct AICheckInView: View {
             }
             store.checkIn.weight = formatNumber(weight)
             store.checkIn.weightUnit = normalizedWeightUnit(from: answer)
+            appendAssistant("Got it: \(store.checkIn.weight) \(store.checkIn.weightUnit).")
             moveToNextStep()
         case .waist:
             guard let waist = firstNumber(in: answer) else {
@@ -541,17 +737,20 @@ struct AICheckInView: View {
             }
             store.checkIn.waist = formatNumber(waist)
             store.checkIn.waistUnit = normalizedWaistUnit(from: answer)
+            appendAssistant("Thanks, I recorded \(store.checkIn.waist) \(store.checkIn.waistUnit) for waist circumference.")
             moveToNextStep()
         case .bloodPressureChoice:
             let lowercased = answer.lowercased()
             if lowercased.contains("yes") || lowercased.contains("have") || lowercased.contains("recent") {
                 store.checkIn.hasRecentBloodPressure = true
+                appendAssistant("Got it. I'll ask for the blood pressure numbers.")
                 moveToNextStep()
             } else if lowercased.contains("no") || lowercased.contains("don't") || lowercased.contains("do not") || lowercased.contains("none") {
                 store.checkIn.hasRecentBloodPressure = false
                 store.checkIn.systolic = ""
                 store.checkIn.diastolic = ""
                 store.checkIn.bloodPressureDate = ""
+                appendAssistant("No problem. I'll skip blood pressure for today.")
                 moveToNextStep()
             } else {
                 showMissing(field: "blood_pressure_optional_choice", label: "Blood pressure optional choice")
@@ -562,6 +761,7 @@ struct AICheckInView: View {
                 return
             }
             store.checkIn.systolic = formatNumber(systolic)
+            appendAssistant("Recorded systolic blood pressure: \(store.checkIn.systolic).")
             moveToNextStep()
         case .bloodPressureDiastolic:
             guard let diastolic = firstNumber(in: answer) else {
@@ -569,9 +769,11 @@ struct AICheckInView: View {
                 return
             }
             store.checkIn.diastolic = formatNumber(diastolic)
+            appendAssistant("Recorded diastolic blood pressure: \(store.checkIn.diastolic).")
             moveToNextStep()
         case .bloodPressureDate:
             store.checkIn.bloodPressureDate = answer.isEmpty ? "Today" : answer
+            appendAssistant("Thanks. I saved the blood pressure date as \(store.checkIn.bloodPressureDate).")
             moveToNextStep()
         case .sleep:
             guard let hours = firstNumber(in: answer) else {
@@ -579,16 +781,19 @@ struct AICheckInView: View {
                 return
             }
             store.checkIn.sleepHours = formatNumber(hours)
+            appendAssistant("Got it: \(store.checkIn.sleepHours) hours of sleep.")
             moveToNextStep()
         case .activity:
             let lowercased = answer.lowercased()
             if lowercased.contains("yes") || lowercased.contains("active") {
                 store.checkIn.activeToday = true
+                appendAssistant("Great. What kind of activity did you do?")
                 moveToNextStep()
             } else if lowercased.contains("no") || lowercased.contains("not") {
                 store.checkIn.activeToday = false
                 store.checkIn.activityType = ""
                 store.checkIn.activityDuration = ""
+                appendAssistant("Got it. I'll record no physical activity for today.")
                 moveToNextStep()
             } else {
                 showMissing(field: "physical_activity_today", label: "Physical activity")
@@ -599,6 +804,7 @@ struct AICheckInView: View {
                 return
             }
             store.checkIn.activityType = normalizedActivityType(answer)
+            appendAssistant("Recorded: \(store.checkIn.activityType).")
             moveToNextStep()
         case .activityDuration:
             guard let minutes = firstNumber(in: answer) else {
@@ -606,6 +812,7 @@ struct AICheckInView: View {
                 return
             }
             store.checkIn.activityDuration = "\(Int(minutes.rounded()))"
+            appendAssistant("Recorded: \(store.checkIn.activityDuration) minutes.")
             moveToNextStep()
         case .movement:
             guard !answer.isEmpty else {
@@ -613,12 +820,14 @@ struct AICheckInView: View {
                 return
             }
             store.checkIn.movementBreaks = normalizedMovementAnswer(answer)
+            appendAssistant("Thanks, I saved that movement-break answer.")
             moveToNextStep()
         case .food:
             if !answer.isEmpty {
                 store.checkIn.foodJournal = "Added"
                 store.checkIn.foodJournalDescription = answer
-                store.estimateFoodNutrition(text: answer, imageBase64: foodPhotoBase64)
+                foodDescriptionDraft = answer
+                appendAssistant("I added that to your food journal and will estimate nutrition from it.")
             }
             continueFromFoodJournal()
         case .reflection:
@@ -627,6 +836,7 @@ struct AICheckInView: View {
                 return
             }
             store.checkIn.dailyReflection = answer
+            appendAssistant("Thanks. I saved your reflection.")
             completeWithValidation()
         }
     }
@@ -722,6 +932,7 @@ struct AICheckInView: View {
         typedAnswer = savedAnswerText(for: nextStep)
         selectedOption = savedOption(for: nextStep)
         store.saveCheckIn(in: modelContext)
+        appendAssistant(questionMessage(for: nextStep))
     }
 
     private func moveToNextStep() {
@@ -782,17 +993,9 @@ struct AICheckInView: View {
         switch targetStep {
         case .bloodPressureChoice:
             return store.checkIn.hasRecentBloodPressure ? "I have a recent reading" : nil
-        case .sleep:
-            return optionButtons.contains("\(store.checkIn.sleepHours) hr") ? "\(store.checkIn.sleepHours) hr" : nil
         case .activity:
             guard let activeToday = store.checkIn.activeToday else { return nil }
             return activeToday ? "Yes" : "No"
-        case .activityType:
-            return optionButtons.contains(store.checkIn.activityType) ? store.checkIn.activityType : nil
-        case .activityDuration:
-            return optionButtons.contains("\(store.checkIn.activityDuration) min") ? "\(store.checkIn.activityDuration) min" : nil
-        case .movement:
-            return optionButtons.contains(store.checkIn.movementBreaks) ? store.checkIn.movementBreaks : nil
         default:
             return nil
         }
@@ -809,7 +1012,7 @@ struct AICheckInView: View {
         missingItems = [
             MissingDataItem(field: field, label: label, code: MissingDataCode.missing)
         ]
-        isShowingMissingDataWarning = true
+        appendAssistant("I couldn't read \(label.lowercased()) from that. \(clarifyingPrompt(for: step))")
     }
 
     private func navigateToFirstMissingItem() {
@@ -851,12 +1054,51 @@ struct AICheckInView: View {
         let items = store.checkInMissingDataItems()
         guard items.isEmpty else {
             missingItems = items
-            isShowingMissingDataWarning = true
+            if let firstMissing = items.first {
+                let missingStep = stepForMissingField(firstMissing.field)
+                move(to: missingStep)
+                appendAssistant("Before I can finish, I still need \(firstMissing.label.lowercased()).")
+            }
             return
         }
+        store.saveCheckIn(in: modelContext)
+        isReviewingSummary = true
+        appendAssistant(reviewSummaryMessage)
+    }
+
+    private func submitReviewedCheckIn() {
         store.checkIn.isCompleted = true
         store.saveCheckIn(in: modelContext)
         store.screen = .completion
+    }
+
+    private var reviewSummaryMessage: String {
+        let activity: String
+        if store.checkIn.activeToday == false {
+            activity = "No physical activity"
+        } else {
+            let type = store.checkIn.activityType.trimmingCharacters(in: .whitespacesAndNewlines)
+            let duration = store.checkIn.activityDuration.trimmingCharacters(in: .whitespacesAndNewlines)
+            activity = [type, duration.isEmpty ? "" : "\(duration) min"]
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
+        }
+        return """
+        Here is today's check-in summary:
+        Sleep: \(emptyFallback(store.checkIn.sleepHours, suffix: "hr"))
+        Activity: \(activity.isEmpty ? "Not logged" : activity)
+        Movement breaks: \(emptyFallback(store.checkIn.movementBreaks))
+        Food journal: \(store.checkIn.foodJournalSummary)
+        Reflection: \(emptyFallback(store.checkIn.dailyReflection))
+        """
+    }
+
+    private func emptyFallback(_ value: String, suffix: String = "") -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return "Not logged"
+        }
+        return suffix.isEmpty ? trimmed : "\(trimmed) \(suffix)"
     }
 
     private func normalizedActivityType(_ text: String) -> String {
