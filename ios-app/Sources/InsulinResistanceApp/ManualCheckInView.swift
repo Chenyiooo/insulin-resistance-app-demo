@@ -390,12 +390,12 @@ struct ManualCheckInView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Would you like to add a food journal for today? (Optional)")
                     .font(.headline)
-                Text("Upload photos or briefly describe what you ate and drank. You can use both methods and add anything that is not shown in your photos.")
+                Text("Upload up to 4 photos from one or more meals, or briefly describe what you ate and drank. We will try to estimate today's total nutrition automatically; adding food names and portions can improve the result.")
                     .font(.callout)
                     .foregroundStyle(AppColor.muted)
 
                 HStack(spacing: 12) {
-                    PhotosPicker(selection: $selectedFoodPhotos, maxSelectionCount: 8, matching: .images) {
+                    PhotosPicker(selection: $selectedFoodPhotos, maxSelectionCount: 4, matching: .images) {
                         FoodJournalActionButton(
                             icon: "photo.on.rectangle",
                             title: selectedFoodPhotos.isEmpty ? "Upload Photos" : "\(selectedFoodPhotos.count) Photo\(selectedFoodPhotos.count == 1 ? "" : "s") Selected"

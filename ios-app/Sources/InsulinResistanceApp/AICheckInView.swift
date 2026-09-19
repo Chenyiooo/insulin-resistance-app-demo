@@ -207,6 +207,7 @@ struct AICheckInView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 18)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .onChange(of: chatMessages) { _, newValue in
                     guard !newValue.isEmpty else { return }
                     withAnimation {
@@ -278,6 +279,14 @@ struct AICheckInView: View {
         }
         .background(.white)
         .animation(.easeInOut(duration: 0.2), value: focusedInput)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedInput = nil
+                }
+            }
+        }
         .sheet(isPresented: $isShowingHealthImport) {
             AppleHealthImportSheet { result in
                 store.applyHealthImport(result)
@@ -570,13 +579,13 @@ struct AICheckInView: View {
             Text("Add food journal")
                 .font(.headline)
                 .foregroundStyle(AppColor.text)
-            Text("Upload up to 8 photos from one or more meals. We will try to identify the foods and automatically estimate today's total calories and nutrients. You do not need to enter calories yourself; adding food names and approximate portions can improve the estimate.")
+            Text("Upload up to 4 photos from one or more meals. We will try to identify the foods and automatically estimate today's total calories and nutrients. You do not need to enter calories yourself; adding food names and approximate portions can improve the estimate.")
                 .font(.callout)
                 .foregroundStyle(AppColor.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 12) {
-                PhotosPicker(selection: $selectedFoodPhotos, maxSelectionCount: 8, matching: .images) {
+                PhotosPicker(selection: $selectedFoodPhotos, maxSelectionCount: 4, matching: .images) {
                     FoodJournalActionButton(
                         icon: "photo.on.rectangle",
                         title: selectedFoodPhotos.isEmpty ? "Upload Photos" : "\(selectedFoodPhotos.count) Photo\(selectedFoodPhotos.count == 1 ? "" : "s") Selected"
@@ -774,6 +783,7 @@ struct AICheckInView: View {
         }
         appendUser(answer)
         typedAnswer = ""
+        focusedInput = nil
         if applyCorrectionIfNeeded(answer) {
             return
         }

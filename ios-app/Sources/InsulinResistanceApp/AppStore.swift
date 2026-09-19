@@ -73,6 +73,7 @@ final class AppStore: ObservableObject {
     @Published var riskPredictionMode: RiskPredictionMode = .localFallback
     @Published var authEmail = ""
     @Published var authPassword = ""
+    @Published var authName = ""
     @Published var accountEmail = ""
     @Published var authMessage = ""
     @Published var cloudSyncMessage = ""
@@ -143,6 +144,7 @@ final class AppStore: ObservableObject {
         authToken = KeychainStore.read(account: "authToken")
         accountEmail = UserDefaults.standard.string(forKey: "accountEmail") ?? ""
         authEmail = accountEmail
+        authName = profile.name
         hasAcceptedPrivacyTerms = UserDefaults.standard.bool(forKey: "hasAcceptedPrivacyTerms")
         refreshLocalRiskAndInsights()
         if authToken != nil {
@@ -438,6 +440,7 @@ final class AppStore: ObservableObject {
         authToken = nil
         accountEmail = ""
         authPassword = ""
+        authName = ""
         authMessage = "Signed out."
         cloudSyncMessage = ""
         KeychainStore.delete(account: "authToken")
@@ -506,13 +509,20 @@ final class AppStore: ObservableObject {
             authMessage = "Enter your email."
             return
         }
+        let trimmedName = authName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isRegistering && trimmedName.isEmpty {
+            authMessage = "Enter your name."
+            return
+        }
         guard authPassword.count >= 8 else {
             authMessage = "Password must be at least 8 characters."
             return
         }
 
         isAuthenticating = true
-        authMessage = isRegistering ? "Creating account..." : "Signing in..."
+        authMessage = isRegistering
+            ? "Creating account... This may take up to a minute while the server starts."
+            : "Signing in... This may take up to a minute while the server starts."
         Task {
             do {
                 let response: AuthResponse
@@ -520,7 +530,7 @@ final class AppStore: ObservableObject {
                     response = try await accountAPI.register(
                         email: authEmail,
                         password: authPassword,
-                        name: profile.name
+                        name: trimmedName
                     )
                 } else {
                     response = try await accountAPI.login(
@@ -531,6 +541,8 @@ final class AppStore: ObservableObject {
 
                 authToken = response.token
                 accountEmail = response.user.email
+                profile.name = response.user.name
+                authName = response.user.name
                 KeychainStore.save(response.token, account: "authToken")
                 UserDefaults.standard.set(response.user.email, forKey: "accountEmail")
                 authMessage = isRegistering ? "Account created." : "Signed in."

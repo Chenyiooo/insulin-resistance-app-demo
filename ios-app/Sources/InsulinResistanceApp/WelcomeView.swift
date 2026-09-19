@@ -61,11 +61,19 @@ struct WelcomeView: View {
     private var authControls: some View {
         VStack(spacing: 18) {
                 VStack(alignment: .leading, spacing: 10) {
+                    if authMode == .createAccount {
+                        TextField("Name", text: $store.authName)
+                            .textContentType(.name)
+                            .textInputAutocapitalization(.words)
+                            .textFieldStyle(AppTextFieldStyle())
+                    }
                     TextField("Email", text: $store.authEmail)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
                         .textFieldStyle(AppTextFieldStyle())
                     SecureField("Password", text: $store.authPassword)
+                        .textContentType(authMode == .createAccount ? .newPassword : .password)
                         .textFieldStyle(AppTextFieldStyle())
                     if !store.authMessage.isEmpty {
                         Text(store.authMessage)

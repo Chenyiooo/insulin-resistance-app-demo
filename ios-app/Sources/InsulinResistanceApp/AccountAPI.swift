@@ -145,7 +145,7 @@ struct AccountAPI {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 20
+        request.timeoutInterval = 75
         request.httpBody = try JSONEncoder().encode([
             "email": email,
             "password": password,
@@ -191,7 +191,7 @@ struct AccountAPI {
 
     private static func shouldRetry(_ error: URLError) -> Bool {
         switch error.code {
-        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .networkConnectionLost, .timedOut:
+        case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .networkConnectionLost:
             return true
         default:
             return false
