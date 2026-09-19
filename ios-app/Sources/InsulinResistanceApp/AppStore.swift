@@ -391,7 +391,7 @@ final class AppStore: ObservableObject {
             if !checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || checkIn.foodPhotoCount > 0 {
                 checkIn.foodJournal = "Added"
             }
-            nutritionEstimateMessage = "Food note saved. Nutrition could not be estimated yet."
+            nutritionEstimateMessage = "Nutrition could not be estimated. Add food names and approximate portions, then try again."
             refreshFeedbackIfReady()
             return
         }
@@ -546,7 +546,7 @@ final class AppStore: ObservableObject {
                 }
             } catch {
                 isAuthenticating = false
-                authMessage = "\(error.localizedDescription) Please try again once; the free demo server may still be waking up. For demo, you can tap Continue without account."
+                authMessage = "\(error.localizedDescription) Please try again once; the free demo server may still be waking up."
             }
         }
     }

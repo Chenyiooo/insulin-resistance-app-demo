@@ -1,8 +1,14 @@
 import SwiftUI
 
 struct WelcomeView: View {
+    private enum AuthMode {
+        case logIn
+        case createAccount
+    }
+
     @EnvironmentObject private var store: AppStore
     @State private var isShowingPrivacyNotice = false
+    @State private var authMode: AuthMode = .logIn
 
     var body: some View {
         ScrollView {
@@ -11,10 +17,12 @@ struct WelcomeView: View {
                     .padding(.top, 52)
 
                 VStack(spacing: 16) {
-                    Text("Welcome")
+                    Text(authMode == .logIn ? "Welcome Back" : "Create Account")
                         .font(.system(size: 42, weight: .bold))
                         .foregroundStyle(.black)
-                    Text("Track, understand, and reflect on everyday habits related to insulin resistance.")
+                    Text(authMode == .logIn
+                         ? "Log in to continue tracking and understanding your everyday habits."
+                         : "Create an account to securely save your profile and daily check-ins.")
                         .font(.title3)
                         .foregroundStyle(AppColor.text)
                         .multilineTextAlignment(.center)
@@ -91,25 +99,20 @@ struct WelcomeView: View {
                     .foregroundStyle(AppColor.blue)
                 }
 
-                PrimaryButton(title: "Log In") {
-                    store.logIn()
-                }
-                .disabled(store.isAuthenticating || !store.hasAcceptedPrivacyTerms)
-
-                OutlineButton(title: "Create Account") {
-                    store.createAccount()
-                }
-                .disabled(store.isAuthenticating || !store.hasAcceptedPrivacyTerms)
-
-                Button("Continue without account") {
-                    if store.hasAcceptedPrivacyTerms {
-                        store.showMain()
+                PrimaryButton(title: authMode == .logIn ? "Log In" : "Create Account") {
+                    if authMode == .logIn {
+                        store.logIn()
                     } else {
-                        store.authMessage = "Review and accept Privacy & Safety before continuing."
+                        store.createAccount()
                     }
                 }
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(AppColor.blue)
+                .disabled(store.isAuthenticating || !store.hasAcceptedPrivacyTerms)
+
+                OutlineButton(title: authMode == .logIn ? "Create Account" : "Back to Log In") {
+                    store.authMessage = ""
+                    authMode = authMode == .logIn ? .createAccount : .logIn
+                }
+                .disabled(store.isAuthenticating)
         }
     }
 }

@@ -111,8 +111,14 @@ private struct AIChatBubble: View {
 }
 
 struct AICheckInView: View {
+    private enum FocusedInput: Hashable {
+        case answer
+        case foodDescription
+    }
+
     @EnvironmentObject private var store: AppStore
     @Environment(\.modelContext) private var modelContext
+    @FocusState private var focusedInput: FocusedInput?
     @State private var typedAnswer = ""
     @State private var selectedOption: String?
     @State private var step: AIQuestionStep = .weight
@@ -165,12 +171,18 @@ struct AICheckInView: View {
         }
         return currentIndex > orderedSteps.startIndex
     }
+    private var foodNutritionNeedsMoreDetail: Bool {
+        store.checkIn.foodNutritionSource == "unable_to_estimate"
+            || store.nutritionEstimateMessage.contains("could not be estimated")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             progressHeader
-            topActions
+            if focusedInput == nil {
+                topActions
+            }
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -187,14 +199,26 @@ struct AICheckInView: View {
                         if !isReviewingSummary && step == .food {
                             foodJournalPanel
                         }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("conversation-bottom")
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 18)
                 }
                 .onChange(of: chatMessages) { _, newValue in
-                    guard let lastMessage = newValue.last else { return }
+                    guard !newValue.isEmpty else { return }
                     withAnimation {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                    }
+                }
+                .onChange(of: focusedInput) { _, newValue in
+                    guard newValue != nil else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        withAnimation {
+                            proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -225,6 +249,7 @@ struct AICheckInView: View {
                     TextField(textPlaceholder, text: $typedAnswer, axis: .vertical)
                         .lineLimit(1...4)
                         .textFieldStyle(AppTextFieldStyle())
+                        .focused($focusedInput, equals: .answer)
                         .onSubmit {
                             submitTypedAnswer()
                         }
@@ -242,14 +267,17 @@ struct AICheckInView: View {
                 }
             }
             .padding(.horizontal, 22)
-            .padding(.vertical, 18)
+            .padding(.vertical, focusedInput == nil ? 18 : 10)
             .overlay(alignment: .top) {
                 Rectangle().fill(AppColor.line).frame(height: 1)
             }
 
-            BottomTabBar()
+            if focusedInput == nil {
+                BottomTabBar()
+            }
         }
         .background(.white)
+        .animation(.easeInOut(duration: 0.2), value: focusedInput)
         .sheet(isPresented: $isShowingHealthImport) {
             AppleHealthImportSheet { result in
                 store.applyHealthImport(result)
@@ -542,7 +570,7 @@ struct AICheckInView: View {
             Text("Add food journal")
                 .font(.headline)
                 .foregroundStyle(AppColor.text)
-            Text("Upload photos, describe what you ate and drank, or skip this optional question.")
+            Text("Upload up to 8 photos from one or more meals. We will try to identify the foods and automatically estimate today's total calories and nutrients. You do not need to enter calories yourself; adding food names and approximate portions can improve the estimate.")
                 .font(.callout)
                 .foregroundStyle(AppColor.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -586,6 +614,7 @@ struct AICheckInView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AppColor.text)
                     TextEditor(text: $foodDescriptionDraft)
+                        .focused($focusedInput, equals: .foodDescription)
                         .frame(minHeight: 92)
                         .padding(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
@@ -626,9 +655,37 @@ struct AICheckInView: View {
                     .font(.caption)
                     .foregroundStyle(AppColor.muted)
             } else if !store.nutritionEstimateMessage.isEmpty {
-                Label(store.nutritionEstimateMessage, systemImage: "checkmark.seal")
+                Label(
+                    store.nutritionEstimateMessage,
+                    systemImage: foodNutritionNeedsMoreDetail ? "exclamationmark.triangle" : "checkmark.seal"
+                )
                     .font(.caption)
-                    .foregroundStyle(AppColor.muted)
+                    .foregroundStyle(foodNutritionNeedsMoreDetail ? Color.orange : AppColor.muted)
+            }
+
+            if foodNutritionNeedsMoreDetail {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Add the food names and approximate portions, then try the estimate again. Your photos and food note will still be saved even if an estimate is unavailable.")
+                        .font(.callout)
+                        .foregroundStyle(AppColor.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        isFoodDescriptionVisible = true
+                        foodDescriptionDraft = store.checkIn.foodJournalDescription
+                        DispatchQueue.main.async {
+                            focusedInput = .foodDescription
+                        }
+                    } label: {
+                        Label("Add meal details and try again", systemImage: "square.and.pencil")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColor.blue)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
             Label("We estimate nutrition by matching your food notes or identified foods from photos to USDA FoodData Central, then adjusting calories and macros based on portion size. Estimates may be imperfect and are for reflection only.", systemImage: "info.circle")
