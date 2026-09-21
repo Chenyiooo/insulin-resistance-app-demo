@@ -1,4 +1,4 @@
-"""Optional local CalorAI inference. Weights are not fetched during requests."""
+"""Local CalorAI inference using CPU-only ONNX models."""
 
 from __future__ import annotations
 
@@ -13,71 +13,47 @@ from pathlib import Path
 MODEL_NAME = "MiaoE/CalorAI"
 
 
+def _model_dir() -> Path:
+    return Path(os.environ["FOOD_VISION_MODEL_DIR"])
+
+
+def _session(path: Path):
+    import onnxruntime as ort
+
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    return ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"])
+
+
 @lru_cache(maxsize=1)
 def _load_classifier():
-    import torch
-    import torch.nn as nn
-    from torchvision import models, transforms
-
-    torch.set_num_threads(1)
-    model_dir = Path(os.environ["FOOD_VISION_MODEL_DIR"])
-    labels = sorted(json.loads((model_dir / "calories_database.json").read_text()))
-    classifier = models.resnet50(weights=None)
-    classifier.fc = nn.Linear(classifier.fc.in_features, len(labels))
-    classifier_state = torch.load(model_dir / "food_classifier.pth", map_location="cpu", weights_only=True)
-    classifier.load_state_dict({key.removeprefix("model."): value for key, value in classifier_state["model_state_dict"].items()})
-    classifier.eval()
-
-    transform = transforms.Compose([
-        transforms.Resize((400, 400)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3),
-    ])
-    return labels, classifier, transform
+    labels = sorted(json.loads((_model_dir() / "calories_database.json").read_text()))
+    return labels, _session(_model_dir() / "food_classifier.onnx")
 
 
 @lru_cache(maxsize=1)
-def _load_regressor(labels: tuple[str, ...]):
-    import torch
-    import torch.nn as nn
-    import timm
-
-    model_dir = Path(os.environ["FOOD_VISION_MODEL_DIR"])
-
-    class PortionRegressor(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.backbone = timm.create_model("resnet34", pretrained=False, num_classes=16)
-            self.vector_embed = nn.Linear(len(labels), 16)
-            self.fc = nn.Sequential(nn.Linear(32, 256), nn.ReLU(), nn.Linear(256, 32), nn.ReLU(), nn.Linear(32, len(labels)), nn.ReLU())
-
-        def forward(self, image, food_vector):
-            return self.fc(torch.cat((self.backbone(image), self.vector_embed(food_vector)), dim=1))
-
-    regressor = PortionRegressor()
-    portion_state = torch.load(model_dir / "portion_regressor.pth", map_location="cpu", weights_only=True)
-    regressor.load_state_dict(portion_state["model_state_dict"])
-    regressor.eval()
-    return regressor
+def _load_regressor():
+    return _session(_model_dir() / "portion_regressor.onnx")
 
 
 def recognize_foods(image_base64: list[str]) -> list[tuple[str, float]]:
-    import torch
+    import numpy as np
     from PIL import Image
 
-    labels, classifier, transform = _load_classifier()
+    labels, classifier = _load_classifier()
     results: list[tuple[str, float]] = []
     for encoded in image_base64[:4]:
-        image = Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGB")
-        tensor = transform(image).unsqueeze(0)
-        with torch.inference_mode():
-            probabilities = torch.sigmoid(classifier(tensor))[0]
-            detected = (probabilities >= 0.7).float()
-            if not detected.any():
-                continue
-            regressor = _load_regressor(tuple(labels))
-            portions = regressor(tensor, detected.unsqueeze(0))[0]
-        for index in detected.nonzero().flatten().tolist():
+        image = Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGB").resize((400, 400))
+        pixels = np.asarray(image, dtype=np.float32) / 127.5 - 1.0
+        tensor = np.transpose(pixels, (2, 0, 1))[None, ...]
+        logits = classifier.run(None, {"image": tensor})[0][0]
+        probabilities = 1.0 / (1.0 + np.exp(-np.clip(logits, -80, 80)))
+        detected = (probabilities >= 0.7).astype(np.float32)
+        if not detected.any():
+            continue
+        portions = _load_regressor().run(None, {"image": tensor, "food_vector": detected[None, ...]})[0][0]
+        for index in np.flatnonzero(detected):
             grams = float(portions[index])
             if 5 <= grams <= 2000:
                 results.append((labels[index], grams))
@@ -87,5 +63,5 @@ def recognize_foods(image_base64: list[str]) -> list[tuple[str, float]]:
 def model_available() -> bool:
     directory = os.getenv("FOOD_VISION_MODEL_DIR")
     return bool(directory and all((Path(directory) / name).is_file() for name in (
-        "calories_database.json", "food_classifier.pth", "portion_regressor.pth"
+        "calories_database.json", "food_classifier.onnx", "portion_regressor.onnx"
     )))
