@@ -14,12 +14,12 @@ MODEL_NAME = "MiaoE/CalorAI"
 
 
 @lru_cache(maxsize=1)
-def _load_models():
+def _load_classifier():
     import torch
     import torch.nn as nn
-    import timm
     from torchvision import models, transforms
 
+    torch.set_num_threads(1)
     model_dir = Path(os.environ["FOOD_VISION_MODEL_DIR"])
     labels = sorted(json.loads((model_dir / "calories_database.json").read_text()))
     classifier = models.resnet50(weights=None)
@@ -27,6 +27,22 @@ def _load_models():
     classifier_state = torch.load(model_dir / "food_classifier.pth", map_location="cpu", weights_only=True)
     classifier.load_state_dict({key.removeprefix("model."): value for key, value in classifier_state["model_state_dict"].items()})
     classifier.eval()
+
+    transform = transforms.Compose([
+        transforms.Resize((400, 400)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3),
+    ])
+    return labels, classifier, transform
+
+
+@lru_cache(maxsize=1)
+def _load_regressor(labels: tuple[str, ...]):
+    import torch
+    import torch.nn as nn
+    import timm
+
+    model_dir = Path(os.environ["FOOD_VISION_MODEL_DIR"])
 
     class PortionRegressor(nn.Module):
         def __init__(self):
@@ -42,19 +58,14 @@ def _load_models():
     portion_state = torch.load(model_dir / "portion_regressor.pth", map_location="cpu", weights_only=True)
     regressor.load_state_dict(portion_state["model_state_dict"])
     regressor.eval()
-    transform = transforms.Compose([
-        transforms.Resize((400, 400)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3),
-    ])
-    return labels, classifier, regressor, transform
+    return regressor
 
 
 def recognize_foods(image_base64: list[str]) -> list[tuple[str, float]]:
     import torch
     from PIL import Image
 
-    labels, classifier, regressor, transform = _load_models()
+    labels, classifier, transform = _load_classifier()
     results: list[tuple[str, float]] = []
     for encoded in image_base64[:4]:
         image = Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGB")
@@ -64,6 +75,7 @@ def recognize_foods(image_base64: list[str]) -> list[tuple[str, float]]:
             detected = (probabilities >= 0.7).float()
             if not detected.any():
                 continue
+            regressor = _load_regressor(tuple(labels))
             portions = regressor(tensor, detected.unsqueeze(0))[0]
         for index in detected.nonzero().flatten().tolist():
             grams = float(portions[index])
