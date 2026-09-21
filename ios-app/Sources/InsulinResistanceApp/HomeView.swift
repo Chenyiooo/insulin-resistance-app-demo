@@ -4,7 +4,7 @@ struct HomeView: View {
     @EnvironmentObject private var store: AppStore
     @State private var knowledgeItem = InsulinKnowledgeLibrary.randomItem()
     private var greetingName: String {
-        let trimmedName = store.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = store.accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedName.isEmpty ? "there" : trimmedName
     }
 

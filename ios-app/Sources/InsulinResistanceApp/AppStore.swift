@@ -75,6 +75,7 @@ final class AppStore: ObservableObject {
     @Published var authPassword = ""
     @Published var authName = ""
     @Published var accountEmail = ""
+    @Published var accountName = ""
     @Published var authMessage = ""
     @Published var cloudSyncMessage = ""
     @Published var isAuthenticating = false
@@ -143,6 +144,7 @@ final class AppStore: ObservableObject {
     init() {
         authToken = KeychainStore.read(account: "authToken")
         accountEmail = UserDefaults.standard.string(forKey: "accountEmail") ?? ""
+        accountName = UserDefaults.standard.string(forKey: "accountName") ?? ""
         authEmail = accountEmail
         authName = profile.name
         hasAcceptedPrivacyTerms = UserDefaults.standard.bool(forKey: "hasAcceptedPrivacyTerms")
@@ -219,6 +221,8 @@ final class AppStore: ObservableObject {
     }
 
     func saveProfile(in context: ModelContext) {
+        accountName = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(accountName, forKey: "accountName")
         upsertProfile(profile, in: context)
         refreshFeedbackIfReady()
         syncProfileToCloud()
@@ -439,12 +443,14 @@ final class AppStore: ObservableObject {
     func signOut() {
         authToken = nil
         accountEmail = ""
+        accountName = ""
         authPassword = ""
         authName = ""
         authMessage = "Signed out."
         cloudSyncMessage = ""
         KeychainStore.delete(account: "authToken")
         UserDefaults.standard.removeObject(forKey: "accountEmail")
+        UserDefaults.standard.removeObject(forKey: "accountName")
     }
 
     func deleteAccount() {
@@ -541,10 +547,16 @@ final class AppStore: ObservableObject {
 
                 authToken = response.token
                 accountEmail = response.user.email
+                accountName = response.user.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if isRegistering {
+                    profile = MockData.profile
+                    checkIn = MockData.checkIn
+                }
                 profile.name = response.user.name
                 authName = response.user.name
                 KeychainStore.save(response.token, account: "authToken")
                 UserDefaults.standard.set(response.user.email, forKey: "accountEmail")
+                UserDefaults.standard.set(accountName, forKey: "accountName")
                 authMessage = isRegistering ? "Account created." : "Signed in."
                 cloudSyncMessage = "Signed in as \(response.user.email)"
                 isAuthenticating = false
@@ -569,6 +581,11 @@ final class AppStore: ObservableObject {
         do {
             if let cloudProfile = try await accountAPI.fetchProfile(token: authToken) {
                 profile = cloudProfile
+                let cloudName = cloudProfile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cloudName.isEmpty {
+                    accountName = cloudName
+                    UserDefaults.standard.set(cloudName, forKey: "accountName")
+                }
                 if let context {
                     upsertProfile(cloudProfile, in: context)
                 }

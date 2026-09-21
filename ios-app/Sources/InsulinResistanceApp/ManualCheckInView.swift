@@ -463,6 +463,28 @@ struct ManualCheckInView: View {
 
                     nutritionEstimateStatus
 
+                    if nutritionEstimateNeedsMoreDetail {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Add food names and approximate portions, then try again. Your written food note and photo count are saved, but the photo files are not stored with your check-in.")
+                                .font(.callout)
+                                .foregroundStyle(AppColor.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button {
+                                foodJournalDescriptionDraft = store.checkIn.foodJournalDescription
+                                isFoodJournalDescriptionVisible = true
+                            } label: {
+                                Label("Add meal details and try again", systemImage: "square.and.pencil")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppColor.blue)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.orange.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
                     Label("We estimate nutrition by matching your food notes or identified foods from photos to USDA FoodData Central, then adjusting calories and macros based on portion size. Estimates may be imperfect and are for reflection only.", systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
@@ -540,8 +562,8 @@ struct ManualCheckInView: View {
                     .controlSize(.small)
                 Text("Estimating from food input...")
             } else if !store.nutritionEstimateMessage.isEmpty {
-                Image(systemName: "checkmark.seal")
-                    .foregroundStyle(AppColor.blue)
+                Image(systemName: nutritionEstimateNeedsMoreDetail ? "exclamationmark.triangle" : "checkmark.seal")
+                    .foregroundStyle(nutritionEstimateNeedsMoreDetail ? Color.orange : AppColor.blue)
                 Text(store.nutritionEstimateMessage)
             } else if !store.checkIn.foodNutritionConfidence.isEmpty {
                 Image(systemName: "info.circle")
@@ -560,6 +582,11 @@ struct ManualCheckInView: View {
         .font(.caption)
         .foregroundStyle(AppColor.muted)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var nutritionEstimateNeedsMoreDetail: Bool {
+        store.checkIn.foodNutritionSource == "unable_to_estimate"
+            || store.nutritionEstimateMessage.contains("could not be estimated")
     }
 
     private func updateFoodJournalStatus() {

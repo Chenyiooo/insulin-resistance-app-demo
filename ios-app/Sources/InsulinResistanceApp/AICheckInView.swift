@@ -132,7 +132,7 @@ struct AICheckInView: View {
     @State private var chatMessages: [AIChatMessage] = []
     @State private var isReviewingSummary = false
     private var greetingName: String {
-        let trimmedName = store.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = store.accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedName.isEmpty ? "there" : trimmedName
     }
     private var firstStep: AIQuestionStep {
@@ -674,7 +674,7 @@ struct AICheckInView: View {
 
             if foodNutritionNeedsMoreDetail {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Add the food names and approximate portions, then try the estimate again. Your photos and food note will still be saved even if an estimate is unavailable.")
+                    Text("Add the food names and approximate portions, then try again. Your written food note and photo count are saved, but the photo files are not stored with your check-in.")
                         .font(.callout)
                         .foregroundStyle(AppColor.text)
                         .fixedSize(horizontal: false, vertical: true)
