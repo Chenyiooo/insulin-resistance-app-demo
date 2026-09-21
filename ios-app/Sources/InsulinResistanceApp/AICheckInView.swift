@@ -697,7 +697,7 @@ struct AICheckInView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
-            Label("We estimate nutrition by matching your food notes or identified foods from photos to USDA FoodData Central, then adjusting calories and macros based on portion size. Estimates may be imperfect and are for reflection only.", systemImage: "info.circle")
+            Label("We match your food notes or foods identified from photos to offline USDA FoodData Central records, then adjust calories and macros for portion size. Estimates may be imperfect and are for reflection only.", systemImage: "info.circle")
                 .font(.caption)
                 .foregroundStyle(AppColor.muted)
                 .fixedSize(horizontal: false, vertical: true)

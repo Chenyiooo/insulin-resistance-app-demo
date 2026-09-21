@@ -42,6 +42,12 @@ Returns the model feature order, profile inputs, check-in inputs, optional input
 
 Accepts the iOS `ModelInputPayload` shape. The most important field is `features`.
 
+### `GET /me/weekly-feedback`
+
+Returns account-specific Day 7 or Day 14 feedback, anchored to the first completed check-in date rather than a weekday. The API uses the latest completed submission for each date and requires every date in the first 7 or 14 calendar days to be complete. A missing day returns `incomplete` with no risk percentage. Day 14 uses all 14 days, not just the most recent seven.
+
+The risk model receives mean sleep duration and, where measured, mean weight, waist circumference, and blood pressure for that window. BMI and waist-to-height ratio are recomputed from those means; profile/categorical features come from the last completed day in the window. `measurement_counts` reports how many actual measurements contributed to each mean. The response also includes the period's check-ins for account-specific trends. This is an aggregation of inputs to the existing LightGBM screening model, not a separately trained longitudinal model.
+
 Example:
 
 ```bash
@@ -82,7 +88,7 @@ The response includes:
 
 ### `POST /nutrition/estimate`
 
-Estimates calories and macronutrients from a typed food description, uploaded food photos, or both. The endpoint parses food items and portion cues, then calculates nutrition values from USDA FoodData Central matches:
+Estimates calories and macronutrients from a typed food description, uploaded food photos, or both. The endpoint parses food items and portion cues, then looks up nutrient values in the bundled offline USDA FoodData Central database. It does not call the USDA API or require an API key:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/nutrition/estimate \
@@ -95,19 +101,15 @@ curl -X POST http://127.0.0.1:8000/nutrition/estimate \
 
 The response includes estimated `calories`, `carbohydrates`, `protein`, `fat`, matched USDA foods, confidence, explanation, and a disclaimer.
 
-If `OPENAI_API_KEY` is configured, the endpoint uses a vision/language model only to identify foods and approximate portions from photos. Nutrient values are still calculated from USDA FoodData Central records:
+Photo recognition uses the open-source [CalorAI](https://github.com/MiaoE/CalorAI) classifier and portion regressor (MIT license), locally on the server. It supports only 26 food classes. Its published portion accuracy within 10% is about 21%, so photo-derived values are always marked low confidence. For each detected class, predicted grams are multiplied by the offline USDA nutrient values per 100 g. Unsupported foods, missing weights, or missing USDA matches are not assigned invented nutrition values.
 
-```bash
-export OPENAI_API_KEY="..."
-export OPENAI_NUTRITION_MODEL="gpt-4o-mini"
-export OPENAI_NUTRITION_IMAGE_DETAIL="high"
-```
+The standard `Dockerfile` does not install these large models. The Render Blueprint now uses `Dockerfile.vision` on a 2 GB API service; it installs CPU PyTorch and fetches CalorAI weights from a pinned GitHub commit. Verify the actual build and photo response after deployment; a local test alone does not prove the live service works.
 
-Set `USDA_FDC_API_KEY` to a FoodData Central API key for production use. Without it, the endpoint uses USDA's limited `DEMO_KEY`, which is suitable only for development checks. On Render, set `OPENAI_API_KEY` and `USDA_FDC_API_KEY` in **Environment** as secret values. Do not commit keys to GitHub. `OPENAI_NUTRITION_MODEL` and `OPENAI_NUTRITION_IMAGE_DETAIL` can stay in `render.yaml`.
+The bundled `backend/data/usda_foods.sqlite` contains 13,535 foods with all four required nutrient values. It was built from USDA's [Foundation Foods April 2026, SR Legacy April 2018, and FNDDS 2021-2023 JSON archives](https://fdc.nal.usda.gov/download-datasets/). To reproduce it, download those three public archives and run `python scripts/build_usda_offline.py foundation.zip sr.zip fndds.zip`. The database is read-only at runtime. Branded products are not included; refresh it when USDA publishes new data.
 
-Use `GET /nutrition/status` to confirm the backend can see the OpenAI and USDA configuration. It reports only non-secret diagnostics such as whether keys are configured, the selected model, USDA data types, and last request status.
+Use `GET /nutrition/status` to check `food_vision_model_available` and `usda_offline_database_available`. Both must be `true` for the full photo pipeline.
 
-If USDA FoodData Central cannot be reached or no reliable food match is found, the endpoint returns `source: "unable_to_estimate"` and does not invent nutrition values. Nutrition values are estimates for reflection only, not medical or dietary advice.
+If the offline database is unavailable or no reliable food match is found, the endpoint returns `source: "unable_to_estimate"` and does not invent nutrition values. Nutrition values are estimates for reflection only, not medical or dietary advice.
 
 ### `POST /insights/daily`
 

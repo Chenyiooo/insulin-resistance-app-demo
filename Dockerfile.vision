@@ -1,0 +1,33 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV FOOD_VISION_MODEL_DIR=/app/food-vision-model
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir timm==1.0.11 Pillow==10.4.0
+
+RUN git init /tmp/calorai \
+    && git -C /tmp/calorai remote add origin https://github.com/MiaoE/CalorAI.git \
+    && git -C /tmp/calorai fetch --depth 1 origin 154da88524411a6c45feed8a206dc2ab613352d6 \
+    && git -C /tmp/calorai checkout FETCH_HEAD \
+    && cd /tmp/calorai \
+    && mkdir -p "$FOOD_VISION_MODEL_DIR" \
+    && cp model/food_classifier.pth model/portion_regressor.pth data/calories_database.json "$FOOD_VISION_MODEL_DIR"/ \
+    && cp LICENSE "$FOOD_VISION_MODEL_DIR"/LICENSE \
+    && rm -rf /tmp/calorai
+
+COPY backend ./backend
+COPY src ./src
+
+EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
