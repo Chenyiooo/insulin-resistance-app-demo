@@ -407,7 +407,7 @@ final class AppStore: ObservableObject {
             if !checkIn.foodJournalDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || checkIn.foodPhotoCount > 0 {
                 checkIn.foodJournal = "Added"
             }
-            nutritionEstimateMessage = "Nutrition could not be estimated. Add food names and approximate portions, then try again."
+            nutritionEstimateMessage = "Nutrition could not be estimated. \(result.explanation)"
             refreshFeedbackIfReady()
             return
         }
@@ -425,7 +425,7 @@ final class AppStore: ObservableObject {
         } else if result.source.contains("local") {
             nutritionEstimateMessage = "On-device estimate: \(checkIn.foodJournalSummary)"
         } else {
-            nutritionEstimateMessage = "AI estimate: \(checkIn.foodJournalSummary)"
+            nutritionEstimateMessage = "USDA estimate: \(checkIn.foodJournalSummary)"
         }
         refreshFeedbackIfReady()
     }

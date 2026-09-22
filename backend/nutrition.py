@@ -5,11 +5,13 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import urllib.error
-import urllib.parse
 import urllib.request
+from contextlib import closing
 from dataclasses import dataclass
 from fractions import Fraction
+from pathlib import Path
 from typing import Any
 
 
@@ -21,8 +23,8 @@ DISCLAIMER = (
     "depends on food identification, portion size, recipe, and preparation method."
 )
 
-USDA_FDC_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 USDA_DATA_TYPES = ("Survey (FNDDS)", "Foundation", "SR Legacy")
+USDA_OFFLINE_DB = Path(__file__).resolve().parent / "data" / "usda_foods.sqlite"
 NUTRIENT_IDS = {
     "calories": 1008,
     "protein": 1003,
@@ -35,10 +37,10 @@ LAST_NUTRITION_STATUS: dict[str, Any] = {
     "openai_ok": False,
     "openai_last_error_type": "not_attempted",
     "openai_last_http_status": None,
-    "usda_attempted": False,
-    "usda_ok": False,
-    "usda_last_error_type": "not_attempted",
-    "usda_last_http_status": None,
+    "openai_last_error_code": None,
+    "offline_lookup_attempted": False,
+    "offline_lookup_ok": False,
+    "offline_lookup_last_error_type": "not_attempted",
 }
 
 
@@ -71,7 +73,11 @@ def estimate_nutrition(text: str = "", image_base64: list[str] | None = None) ->
             matched_foods=[],
             source="unable_to_estimate",
             confidence="low",
-            explanation="No recognizable food and portion information was found.",
+            explanation=(
+                "Photo recognition is unavailable or found no recognizable food. "
+                "Describe the food and approximate portion to try again."
+                if images else "No recognizable food and portion information was found."
+            ),
         )
 
     usda_result = _estimate_with_usda(deduped_foods)
@@ -87,8 +93,8 @@ def estimate_nutrition(text: str = "", image_base64: list[str] | None = None) ->
         source="unable_to_estimate",
         confidence="low",
         explanation=(
-            "Food items were detected, but USDA FoodData Central could not be reached "
-            "or did not return usable nutrient matches."
+            "Food items were detected, but no usable match was found in the bundled "
+            "USDA FoodData Central dataset."
         ),
     )
 
@@ -307,9 +313,12 @@ def _identify_foods_with_openai(text: str, image_base64: list[str]) -> list[Pars
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")[:500]
-        _record_openai_status(ok=False, error_type="http_error", http_status=exc.code)
-        logger.warning("OpenAI food identification failed status=%s body=%s", exc.code, body)
+        try:
+            error_code = json.loads(exc.read().decode("utf-8")).get("error", {}).get("code")
+        except (ValueError, AttributeError):
+            error_code = None
+        _record_openai_status(ok=False, error_type="http_error", http_status=exc.code, error_code=error_code)
+        logger.warning("OpenAI food identification failed status=%s code=%s", exc.code, error_code)
         return []
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         _record_openai_status(ok=False, error_type=type(exc).__name__)
@@ -374,38 +383,50 @@ def _estimate_with_usda(foods: list[ParsedFood]) -> dict[str, Any] | None:
 
 
 def _search_usda_food(query: str) -> dict[str, Any] | None:
-    api_key = os.getenv("USDA_FDC_API_KEY", "DEMO_KEY")
-    params = urllib.parse.urlencode({"api_key": api_key})
-    payload = {
-        "query": _food_search_query(query),
-        "pageSize": 25,
-        "dataType": list(USDA_DATA_TYPES),
-    }
-    request = urllib.request.Request(
-        f"{USDA_FDC_SEARCH_URL}?{params}",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    database_path = Path(os.getenv("USDA_OFFLINE_DB_PATH", str(USDA_OFFLINE_DB)))
+    tokens = re.findall(r"[a-z0-9]+", _food_search_query(query).lower())[:8]
+    LAST_NUTRITION_STATUS.update(
+        offline_lookup_attempted=True,
+        offline_lookup_ok=False,
+        offline_lookup_last_error_type="request_started",
     )
-    _record_usda_status(ok=False, error_type="request_started")
+    if not tokens:
+        LAST_NUTRITION_STATUS["offline_lookup_last_error_type"] = "invalid_query"
+        return None
     try:
-        with urllib.request.urlopen(request, timeout=12) as response:
-            raw = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        _record_usda_status(ok=False, error_type="http_error", http_status=exc.code)
-        logger.warning("USDA FoodData Central request failed status=%s query=%s", exc.code, query)
+        with closing(sqlite3.connect(f"{database_path.resolve().as_uri()}?mode=ro", uri=True)) as database:
+            database.row_factory = sqlite3.Row
+            rows = database.execute(
+                "SELECT f.fdc_id, f.description, f.data_type, f.calories, f.carbohydrates, f.protein, f.fat "
+                "FROM foods_fts JOIN foods AS f ON f.fdc_id = foods_fts.rowid "
+                "WHERE foods_fts MATCH ? ORDER BY bm25(foods_fts) LIMIT 100",
+                (" OR ".join(tokens),),
+            ).fetchall()
+    except (OSError, sqlite3.Error) as exc:
+        LAST_NUTRITION_STATUS["offline_lookup_last_error_type"] = type(exc).__name__
+        logger.warning("Offline USDA lookup failed: %s", exc)
         return None
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        _record_usda_status(ok=False, error_type=type(exc).__name__)
-        logger.warning("USDA FoodData Central request failed query=%s error=%s", query, exc)
-        return None
-
-    foods = raw.get("foods", [])
+    foods = [
+        {
+            "fdcId": row["fdc_id"],
+            "description": row["description"],
+            "dataType": row["data_type"],
+            "foodNutrients": [
+                {"nutrientId": nutrient_id, "value": row[column]}
+                for column, nutrient_id in NUTRIENT_IDS.items()
+            ],
+        }
+        for row in rows
+    ]
     if not foods:
-        _record_usda_status(ok=False, error_type="no_match")
+        LAST_NUTRITION_STATUS["offline_lookup_last_error_type"] = "no_match"
         return None
-    _record_usda_status(ok=True, error_type=None)
-    return _best_usda_match(query, foods)
+    match = _best_usda_match(query, foods)
+    LAST_NUTRITION_STATUS.update(
+        offline_lookup_ok=match is not None,
+        offline_lookup_last_error_type=None if match else "no_confident_match",
+    )
+    return match
 
 
 def _food_search_query(query: str) -> str:
@@ -421,11 +442,16 @@ def _food_search_query(query: str) -> str:
 
 
 def _best_usda_match(query: str, foods: list[dict[str, Any]]) -> dict[str, Any] | None:
-    candidates = [food for food in foods if _nutrients_per_100g(food)["calories"] > 0]
-    if not candidates:
-        return None
     search_query = _food_search_query(query)
     query_tokens = _food_tokens(search_query)
+    minimum_overlap = min(2, len(query_tokens))
+    candidates = [
+        food for food in foods
+        if _nutrients_per_100g(food)["calories"] > 0
+        and len(query_tokens & _food_tokens(str(food.get("description", "")))) >= minimum_overlap
+    ]
+    if not candidates:
+        return None
     return max(candidates, key=lambda food: _usda_match_score(search_query, query_tokens, food))
 
 
@@ -454,6 +480,8 @@ def _usda_match_score(search_query: str, query_tokens: set[str], food: dict[str,
 
 def _mismatch_penalty(query_tokens: set[str], description_tokens: set[str]) -> float:
     penalty = 0.0
+    if "fried" in description_tokens and "fried" not in query_tokens:
+        penalty += 8
     if "rice" in query_tokens and "noodles" in description_tokens:
         penalty += 12
     if "chicken" in query_tokens:
@@ -553,36 +581,30 @@ def _safe_nonnegative_float(value: Any) -> float:
     return parsed
 
 
-def _record_openai_status(*, ok: bool, error_type: str | None, http_status: int | None = None) -> None:
+def _record_openai_status(
+    *, ok: bool, error_type: str | None, http_status: int | None = None,
+    error_code: str | None = None,
+) -> None:
     LAST_NUTRITION_STATUS.update(
         {
             "openai_attempted": error_type != "not_configured",
             "openai_ok": ok,
             "openai_last_error_type": error_type,
             "openai_last_http_status": http_status,
-        }
-    )
-
-
-def _record_usda_status(*, ok: bool, error_type: str | None, http_status: int | None = None) -> None:
-    LAST_NUTRITION_STATUS.update(
-        {
-            "usda_attempted": error_type != "not_configured",
-            "usda_ok": ok,
-            "usda_last_error_type": error_type,
-            "usda_last_http_status": http_status,
+            "openai_last_error_code": error_code,
         }
     )
 
 
 def get_nutrition_ai_status() -> dict[str, Any]:
+    database_path = Path(os.getenv("USDA_OFFLINE_DB_PATH", str(USDA_OFFLINE_DB)))
     return {
         "openai_api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
         "openai_model": os.getenv("OPENAI_NUTRITION_MODEL", "gpt-4o-mini"),
         "openai_image_detail": os.getenv("OPENAI_NUTRITION_IMAGE_DETAIL", "high"),
-        "usda_fdc_api_key_configured": bool(os.getenv("USDA_FDC_API_KEY")),
+        "usda_offline_database_available": database_path.is_file(),
         "usda_fdc_data_types": list(USDA_DATA_TYPES),
-        "nutrition_source": "USDA FoodData Central",
+        "nutrition_source": "USDA FoodData Central offline database",
         **LAST_NUTRITION_STATUS,
     }
 

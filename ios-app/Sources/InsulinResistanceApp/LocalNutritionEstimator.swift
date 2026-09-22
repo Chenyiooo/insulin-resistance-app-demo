@@ -12,7 +12,7 @@ struct LocalNutritionEstimator {
             source: "unable_to_estimate",
             confidence: "low",
             explanation: hasFoodInput
-                ? "The USDA FoodData Central nutrition service was unavailable, so nutrition values were not estimated."
+                ? "Nutrition could not be estimated from the bundled USDA food data."
                 : "Add a food description or photo first.",
             disclaimer: "Nutrition values are estimates for reflection only, not medical or dietary advice."
         )

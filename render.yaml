@@ -39,5 +39,3 @@ services:
         value: high
       - key: OPENAI_INSIGHTS_MODEL
         value: gpt-4o-mini
-      - key: USDA_FDC_API_KEY
-        sync: false
