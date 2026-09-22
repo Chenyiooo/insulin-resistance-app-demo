@@ -457,7 +457,7 @@ struct ManualCheckInView: View {
                     Text("Estimated nutrition summary")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AppColor.text)
-                    Text("Optional. Enter an estimate if you know it, or use the app's offline USDA food data from your description or photo.")
+                    Text("Optional. Enter an estimate if you know it, or use USDA FoodData Central estimation from your food description or photo.")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
 
@@ -485,7 +485,7 @@ struct ManualCheckInView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
 
-                    Label("We match your food notes or foods identified from photos to offline USDA FoodData Central records, then adjust calories and macros for portion size. Estimates may be imperfect and are for reflection only.", systemImage: "info.circle")
+                    Label("We estimate nutrition by matching your food notes or identified foods from photos to USDA FoodData Central, then adjusting calories and macros based on portion size. Estimates may be imperfect and are for reflection only.", systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -572,7 +572,7 @@ struct ManualCheckInView: View {
             } else if store.checkIn.foodPhotoCount > 0 {
                 Image(systemName: "photo")
                     .foregroundStyle(AppColor.blue)
-                Text("Photo selected. The backend will try to identify the food and check its offline USDA nutrition data.")
+                Text("Photo selected. Nutrition will be estimated through the backend using USDA FoodData Central when available.")
             } else {
                 Image(systemName: "sparkles")
                     .foregroundStyle(AppColor.blue)

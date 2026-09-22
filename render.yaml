@@ -8,8 +8,7 @@ services:
   - type: web
     name: insulin-resistance-api
     runtime: docker
-    dockerfilePath: ./Dockerfile.vision
-    plan: 1c-2g
+    plan: free
     healthCheckPath: /ready
     envVars:
       - key: IR_ENV
@@ -34,5 +33,11 @@ services:
         value: "60"
       - key: IR_AUTH_MAX_REQUESTS
         value: "12"
+      - key: OPENAI_NUTRITION_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_NUTRITION_IMAGE_DETAIL
+        value: high
       - key: OPENAI_INSIGHTS_MODEL
         value: gpt-4o-mini
+      - key: USDA_FDC_API_KEY
+        sync: false
