@@ -1,9 +1,11 @@
 import SwiftUI
-import SwiftData
 
 struct ProgressDashboardView: View {
     @EnvironmentObject private var store: AppStore
     @State private var selectedSegment = 0
+    #if DEBUG && targetEnvironment(simulator)
+    @State private var previewDays: Int?
+    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,6 +22,24 @@ struct ProgressDashboardView: View {
                     }
                     .pickerStyle(.segmented)
 
+                    #if DEBUG && targetEnvironment(simulator)
+                    if selectedSegment == 1 {
+                        HStack {
+                            Text("Simulator preview")
+                                .font(.footnote.weight(.semibold))
+                            Spacer()
+                            Button("6 days") { previewDays = 6 }
+                            Button("7 days") { previewDays = 7 }
+                            Button("14 days") { previewDays = 14 }
+                            if previewDays != nil {
+                                Button("End") { previewDays = nil }
+                            }
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(AppColor.blue)
+                    }
+                    #endif
+
                     if selectedSegment == 0 {
                         PredictionStatusBanner(
                             mode: store.riskPredictionMode,
@@ -32,7 +52,11 @@ struct ProgressDashboardView: View {
                     if selectedSegment == 0 {
                         DailyInsightsView()
                     } else {
+                        #if DEBUG && targetEnvironment(simulator)
+                        WeeklyRiskView(previewDays: previewDays)
+                        #else
                         WeeklyRiskView()
+                        #endif
                     }
                 }
                 .padding(.horizontal, 20)
@@ -41,6 +65,11 @@ struct ProgressDashboardView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(.white)
+        .onAppear {
+            if store.hasNewWeeklyFeedbackToday {
+                selectedSegment = 1
+            }
+        }
     }
 }
 
@@ -194,20 +223,51 @@ struct DailyInsightsView: View {
 
 struct WeeklyRiskView: View {
     @EnvironmentObject private var store: AppStore
-    @Query(sort: \StoredDailyCheckIn.checkInDate) private var savedCheckIns: [StoredDailyCheckIn]
     @State private var selectedTrend: WeeklyTrendMetric?
+    private var periodCheckIns: [StoredDailyCheckIn] {
+        (store.weeklyFeedback?.periodCheckIns ?? []).compactMap { item in
+            guard let date = Self.checkInDate(item.checkInDate) else { return nil }
+            let record = StoredDailyCheckIn(checkIn: item.data, missingItems: [])
+            record.checkInDate = date
+            return record
+        }
+    }
+    #if DEBUG && targetEnvironment(simulator)
+    var previewDays: Int? = nil
+
+    private var displayedCheckIns: [StoredDailyCheckIn] {
+        guard let previewDays else { return periodCheckIns }
+        return (0..<previewDays).compactMap { offset in
+            guard let date = Calendar.current.date(byAdding: .day, value: offset - previewDays + 1, to: Date()) else { return nil }
+            var sample = store.checkIn
+            sample.isCompleted = true
+            let record = StoredDailyCheckIn(checkIn: sample, missingItems: [])
+            record.checkInDate = Calendar.current.startOfDay(for: date)
+            return record
+        }
+    }
+    #else
+    private var displayedCheckIns: [StoredDailyCheckIn] { periodCheckIns }
+    #endif
 
     private var completedDayCount: Int {
-        WeeklyHistorySummary.completedUniqueDayCount(savedCheckIns)
+        WeeklyHistorySummary.completedUniqueDayCount(displayedCheckIns)
     }
 
     private var hasEnoughWeeklyData: Bool {
-        completedDayCount >= 7
+        isPreviewing ? completedDayCount >= 7 : store.weeklyFeedback?.status == "ready"
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Week of \(Self.weekRangeText())")
+            #if DEBUG && targetEnvironment(simulator)
+            if previewDays != nil {
+                Text("SIMULATED HISTORY - not saved or uploaded. This previews the layout only; it does not generate a risk estimate.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
+            #endif
+            Text(feedbackTitle)
                 .font(.headline)
                 .foregroundStyle(AppColor.text)
 
@@ -218,8 +278,11 @@ struct WeeklyRiskView: View {
             }
         }
         .sheet(item: $selectedTrend) { metric in
-            WeeklyTrendDetailView(metric: metric)
+            WeeklyTrendDetailView(metric: metric, periodCheckIns: displayedCheckIns)
                 .environmentObject(store)
+        }
+        .task {
+            await store.refreshWeeklyFeedback()
         }
     }
 
@@ -230,14 +293,16 @@ struct WeeklyRiskView: View {
                     Label("Weekly feedback is not ready yet", systemImage: "calendar.badge.clock")
                         .font(.title3.bold())
                         .foregroundStyle(AppColor.text)
-                    Text("You need about one week of completed daily check-ins before weekly feedback, risk estimates, and weekly trend summaries are shown.")
+                    Text("Feedback is available after \(store.weeklyFeedback?.requiredDays ?? 7) consecutive completed check-ins from your first day.")
                         .font(.callout)
                         .foregroundStyle(AppColor.text)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("\(completedDayCount) of 7 completed check-in days saved on this device.")
+                    Text(isPreviewing
+                         ? "\(completedDayCount) completed days in simulator preview."
+                         : "\(store.weeklyFeedback?.completedDays ?? completedDayCount) of \(store.weeklyFeedback?.requiredDays ?? 7) completed days for this feedback period.")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(AppColor.blue)
-                    Text("For now, no weekly risk estimate is displayed because there is not enough real data.")
+                    Text(isPreviewing ? "Select 7 or 14 days above to inspect the layout." : "The estimate appears after every day in the period has a completed check-in.")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -245,7 +310,7 @@ struct WeeklyRiskView: View {
             }
             .background(AppColor.sky)
 
-            Text("Weekly trends will use real saved check-ins only.")
+            Text(isPreviewing ? "Preview records exist only on this screen." : "Weekly trends will use real saved check-ins only.")
                 .font(.caption)
                 .foregroundStyle(AppColor.muted)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -254,21 +319,30 @@ struct WeeklyRiskView: View {
 
     private var weeklyRiskContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            PredictionStatusBanner(
-                mode: store.riskPredictionMode,
-                actionTitle: store.hasMissingRequiredData ? "Complete missing info" : nil
-            ) {
-                store.completeMissingRequiredInput()
-            }
-
+            if let feedback = store.weeklyFeedback, let result = feedback.riskResult, !isPreviewing {
+                Text("Based on \(feedback.milestoneDay ?? 7) consecutive completed days. Daily measurements are averaged; profile answers use the latest answers in that period.")
+                    .font(.callout)
+                    .foregroundStyle(AppColor.muted)
+                if let sleep = feedback.averagedFeatures["sleep_hours"] {
+                    Text(String(format: "Average sleep: %.1f hr (%d days)", sleep, feedback.measurementCounts["sleep_hours"] ?? 0))
+                        .font(.callout)
+                }
+                if let weight = feedback.averagedFeatures["weight"] {
+                    Text(String(format: "Average weight: %.1f kg (%d measured days)", weight, feedback.measurementCounts["weight"] ?? 0))
+                        .font(.callout)
+                }
+                if let waist = feedback.averagedFeatures["waist_circumference"] {
+                    Text(String(format: "Average waist: %.1f cm (%d measured days)", waist, feedback.measurementCounts["waist_circumference"] ?? 0))
+                        .font(.callout)
+                }
             SectionCard {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(store.weeklyRisk.band)
+                            Text(result.band)
                                 .font(.title2.bold())
                                 .foregroundStyle(AppColor.blue)
-                            Text("\(store.weeklyRisk.score)% estimated risk")
+                            Text("\(result.percent)% estimated risk")
                                 .font(.headline)
                                 .foregroundStyle(AppColor.text)
                         }
@@ -277,21 +351,21 @@ struct WeeklyRiskView: View {
                             Circle()
                                 .stroke(Color.blue.opacity(0.15), lineWidth: 8)
                             Circle()
-                                .trim(from: 0, to: CGFloat(store.weeklyRisk.score) / 100)
+                                .trim(from: 0, to: CGFloat(result.percent) / 100)
                                 .stroke(AppColor.blue, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
-                            Text("\(store.weeklyRisk.score)%")
+                            Text("\(result.percent)%")
                                 .font(.headline)
                                 .foregroundStyle(AppColor.blue)
                         }
                         .frame(width: 72, height: 72)
                     }
 
-                    Slider(value: .constant(Double(store.weeklyRisk.score)), in: 0...100)
+                    Slider(value: .constant(Double(result.percent)), in: 0...100)
                         .tint(AppColor.blue)
                         .disabled(true)
 
-                    Text(riskComparisonText)
+                    Text(riskComparisonText(result.percent))
                         .font(.callout)
                         .foregroundStyle(AppColor.text)
                     Text("This is a screening estimate, not a diagnosis.")
@@ -308,15 +382,22 @@ struct WeeklyRiskView: View {
                     title: "Increasing estimate",
                     icon: "arrow.up.circle",
                     color: .red,
-                    factors: store.weeklyRisk.increasing
+                    factors: result.increasingFactors
                 )
                 Divider().padding(.vertical, 8)
                 FactorList(
                     title: "Decreasing estimate",
                     icon: "arrow.down.circle",
                     color: .green,
-                    factors: store.weeklyRisk.decreasing
+                    factors: result.decreasingFactors
                 )
+            }
+            } else {
+                SectionCard {
+                    Text(isPreviewing ? "Preview only. No simulated risk percentage is shown." : "The period has enough records, but its model estimate is unavailable. Please try again later.")
+                        .font(.callout)
+                        .foregroundStyle(AppColor.muted)
+                }
             }
 
             Text("Explore weekly trends")
@@ -341,12 +422,32 @@ struct WeeklyRiskView: View {
         }
     }
 
-    private var riskComparisonText: String {
+    private func riskComparisonText(_ score: Int) -> String {
         let cutoff = 65
-        if store.weeklyRisk.score >= cutoff {
-            return "Your estimate is \(store.weeklyRisk.score - cutoff) percentage points above the high-risk cutoff."
+        if score >= cutoff {
+            return "Your estimate is \(score - cutoff) percentage points above the high-risk cutoff."
         }
-        return "Your estimate is \(cutoff - store.weeklyRisk.score) percentage points below the high-risk cutoff."
+        return "Your estimate is \(cutoff - score) percentage points below the high-risk cutoff."
+    }
+
+    private var feedbackTitle: String {
+        if isPreviewing { return "Day \(completedDayCount) preview" }
+        if let day = store.weeklyFeedback?.milestoneDay { return "Day \(day) feedback" }
+        return "7-day feedback"
+    }
+
+    private static func checkInDate(_ value: String) -> Date? {
+        let parts = value.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
+    private var isPreviewing: Bool {
+        #if DEBUG && targetEnvironment(simulator)
+        previewDays != nil
+        #else
+        false
+        #endif
     }
 
     private static func weekRangeText() -> String {
@@ -692,12 +793,11 @@ enum WeeklyTrendMetric: String, Identifiable {
 struct WeeklyTrendDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
-    @Query(sort: \StoredDailyCheckIn.checkInDate) private var savedCheckIns: [StoredDailyCheckIn]
-
     let metric: WeeklyTrendMetric
+    let periodCheckIns: [StoredDailyCheckIn]
 
     private var trendData: TrendData {
-        TrendDataBuilder.make(metric: metric, savedCheckIns: savedCheckIns)
+        TrendDataBuilder.make(metric: metric, savedCheckIns: periodCheckIns)
     }
 
     var body: some View {
@@ -722,7 +822,7 @@ struct WeeklyTrendDetailView: View {
                     SectionCard {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
-                                Text("Weekly trend")
+                                Text("\(periodCheckIns.count)-day trend")
                                     .font(.headline)
                                     .foregroundStyle(AppColor.blue)
                                 Spacer()
@@ -734,11 +834,11 @@ struct WeeklyTrendDetailView: View {
                             if trendData.points.count >= 2 {
                                 TrendLineChart(points: trendData.points, color: metric.chartColor, unit: metric.unit)
                                     .frame(height: 220)
-                                Text("This trend uses saved daily check-ins on this device.")
+                                Text("This trend uses the same account's check-ins as the feedback period.")
                                     .font(.caption)
                                     .foregroundStyle(AppColor.muted)
                             } else {
-                                Text("Not enough real saved check-ins yet. Complete more daily check-ins to see this trend.")
+                                Text("Not enough recorded values to show this trend.")
                                     .font(.callout)
                                     .foregroundStyle(AppColor.text)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -810,10 +910,9 @@ enum WeeklyHistorySummary {
 
 enum TrendDataBuilder {
     static func make(metric: WeeklyTrendMetric, savedCheckIns: [StoredDailyCheckIn]) -> TrendData {
-        let calendar = Calendar.current
         let realPoints = savedCheckIns
             .filter(\.isCompleted)
-            .suffix(7)
+            .suffix(14)
             .compactMap { stored -> TrendPoint? in
                 guard let value = value(for: metric, checkIn: stored.dailyCheckIn) else { return nil }
                 return TrendPoint(label: weekdayLabel(for: stored.checkInDate), value: value)
@@ -823,14 +922,14 @@ enum TrendDataBuilder {
         let currentValue = points.last?.value
         let currentText = currentValue.map { formattedValue($0, metric: metric) } ?? "Not logged"
         let caption = currentValueCaption(for: metric, value: currentValue)
-        let today = calendar.startOfDay(for: Date())
-        let start = calendar.date(byAdding: .day, value: -6, to: today) ?? today
+        let start = savedCheckIns.first?.checkInDate ?? Date()
+        let end = savedCheckIns.last?.checkInDate ?? Date()
 
         return TrendData(
             points: points,
             currentValueText: currentText,
             currentCaption: caption,
-            rangeLabel: "\(shortDate(start))- \(shortDate(today))"
+            rangeLabel: "\(shortDate(start))- \(shortDate(end))"
         )
     }
 

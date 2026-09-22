@@ -55,6 +55,42 @@ struct CheckInEnvelope<T: Codable>: Codable {
     }
 }
 
+struct WeeklyFeedbackResponse: Decodable {
+    let status: String
+    let firstCheckInDate: String?
+    let milestoneDay: Int?
+    let completedDays: Int
+    let requiredDays: Int
+    let riskResult: RiskPredictionResponse?
+    let averagedFeatures: [String: Double]
+    let measurementCounts: [String: Int]
+    let periodEnd: String?
+    let periodCheckIns: [WeeklyPeriodCheckIn]
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case firstCheckInDate = "first_checkin_date"
+        case milestoneDay = "milestone_day"
+        case completedDays = "completed_days"
+        case requiredDays = "required_days"
+        case riskResult = "risk_result"
+        case averagedFeatures = "averaged_features"
+        case measurementCounts = "measurement_counts"
+        case periodEnd = "period_end"
+        case periodCheckIns = "period_checkins"
+    }
+}
+
+struct WeeklyPeriodCheckIn: Decodable {
+    let checkInDate: String
+    let data: DailyCheckIn
+
+    enum CodingKeys: String, CodingKey {
+        case checkInDate = "checkin_date"
+        case data
+    }
+}
+
 struct AccountAPI {
     var baseURL = AppEnvironment.apiBaseURL
     var session: URLSession = .shared
@@ -103,6 +139,12 @@ struct AccountAPI {
             return try JSONDecoder().decode(CheckInEnvelope<DailyCheckIn>.self, from: data)
         }
         throw decodeServerError(data: data, statusCode: httpResponse.statusCode)
+    }
+
+    func fetchWeeklyFeedback(token: String) async throws -> WeeklyFeedbackResponse {
+        let request = authorizedRequest(path: "me/weekly-feedback", token: token)
+        let data = try await validatedData(for: request)
+        return try JSONDecoder().decode(WeeklyFeedbackResponse.self, from: data)
     }
 
     func saveCheckIn(

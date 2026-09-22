@@ -13,6 +13,7 @@ from backend.daily_insights import generate_daily_insights
 from backend.service import ModelInputError, RiskPredictionService, prediction_to_dict
 from backend import storage
 from backend.nutrition import estimate_nutrition, get_nutrition_ai_status, validate_base64_images
+from backend.weekly_feedback import build_weekly_feedback
 from backend.security import InMemoryAuthRateLimitMiddleware, SecurityHeadersMiddleware, allowed_origins
 
 
@@ -305,6 +306,11 @@ def get_my_checkins(
 @app.get("/me/checkins/latest", response_model=CheckInResponse | None)
 def get_latest_checkin(current: dict[str, Any] = Depends(current_user)) -> dict[str, Any] | None:
     return storage.latest_checkin(current["id"])
+
+
+@app.get("/me/weekly-feedback")
+def get_my_weekly_feedback(current: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    return build_weekly_feedback(storage.list_checkins(current["id"], limit=1000), service)
 
 
 @app.post("/nutrition/estimate", response_model=NutritionEstimateResponse)

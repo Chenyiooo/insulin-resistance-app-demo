@@ -71,6 +71,8 @@ final class AppStore: ObservableObject {
     @Published var weeklyRisk = MockData.weeklyRisk
     @Published var dailyInsights = MockData.dailyInsights
     @Published var riskPredictionMode: RiskPredictionMode = .localFallback
+    @Published var weeklyFeedback: WeeklyFeedbackResponse?
+    @Published var weeklyFeedbackError: String?
     @Published var authEmail = ""
     @Published var authPassword = ""
     @Published var authName = ""
@@ -94,14 +96,22 @@ final class AppStore: ObservableObject {
     private let dailyInsightsAPI = DailyInsightsAPI()
     private let accountAPI = AccountAPI()
     private var authToken: String?
-    private let weeklyCheckInWeekday = 4
 
     var isSignedIn: Bool {
         authToken != nil
     }
 
     var shouldShowWeeklyCheckIn: Bool {
-        Self.isWeeklyCheckInDay(Date(), weekday: weeklyCheckInWeekday)
+        guard let firstDate = weeklyFeedback?.firstCheckInDate,
+              let start = Self.checkInDate(firstDate) else { return true }
+        let elapsed = Calendar.current.dateComponents(
+            [.day], from: Calendar.current.startOfDay(for: start), to: Calendar.current.startOfDay(for: Date())
+        ).day ?? 0
+        return elapsed == 6 || elapsed == 13
+    }
+
+    var hasNewWeeklyFeedbackToday: Bool {
+        weeklyFeedback?.status == "ready" && weeklyFeedback?.periodEnd == Self.todayString()
     }
 
     var canGenerateDailyFeedback: Bool {
@@ -444,6 +454,8 @@ final class AppStore: ObservableObject {
         authToken = nil
         accountEmail = ""
         accountName = ""
+        weeklyFeedback = nil
+        weeklyFeedbackError = nil
         authPassword = ""
         authName = ""
         authMessage = "Signed out."
@@ -551,6 +563,7 @@ final class AppStore: ObservableObject {
                 if isRegistering {
                     profile = MockData.profile
                     checkIn = MockData.checkIn
+                    weeklyFeedback = nil
                 }
                 profile.name = response.user.name
                 authName = response.user.name
@@ -598,6 +611,7 @@ final class AppStore: ObservableObject {
                     upsertCheckIn(checkIn, in: context)
                 }
             }
+            await refreshWeeklyFeedback()
             refreshFeedbackIfReady()
             cloudSyncMessage = "Cloud data loaded."
         } catch {
@@ -635,6 +649,9 @@ final class AppStore: ObservableObject {
                     provenance: checkInProvenance
                 )
                 cloudSyncMessage = "Check-in synced to cloud."
+                if checkIn.isCompleted {
+                    await refreshWeeklyFeedback()
+                }
             } catch {
                 cloudSyncMessage = "Check-in sync failed: \(error.localizedDescription)"
             }
@@ -791,8 +808,20 @@ final class AppStore: ObservableObject {
         }
     }
 
-    private static func isWeeklyCheckInDay(_ date: Date, weekday: Int) -> Bool {
-        Calendar.current.component(.weekday, from: date) == weekday
+    func refreshWeeklyFeedback() async {
+        guard let authToken else { return }
+        do {
+            weeklyFeedback = try await accountAPI.fetchWeeklyFeedback(token: authToken)
+            weeklyFeedbackError = nil
+        } catch {
+            weeklyFeedbackError = error.localizedDescription
+        }
+    }
+
+    private static func checkInDate(_ value: String) -> Date? {
+        let parts = value.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 }
 

@@ -49,6 +49,22 @@ struct HomeView: View {
                 }
                 .background(AppColor.sky)
 
+                if store.hasNewWeeklyFeedbackToday, let day = store.weeklyFeedback?.milestoneDay {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Day \(day) feedback is ready", systemImage: "chart.line.uptrend.xyaxis")
+                                .font(.headline)
+                                .foregroundStyle(AppColor.ink)
+                            Text("Your estimate uses your completed check-ins from the first \(day) days.")
+                                .font(.callout)
+                                .foregroundStyle(AppColor.muted)
+                            PrimaryButton(title: "View Feedback") {
+                                store.showMain(tab: .progress)
+                            }
+                        }
+                    }
+                }
+
                 SectionCard {
                     VStack(alignment: .leading, spacing: 18) {
                         Text("LEARN ABOUT INSULIN RESISTANCE")
