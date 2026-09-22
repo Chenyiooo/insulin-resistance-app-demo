@@ -42,7 +42,7 @@ struct NutritionEstimateAPI {
         var request = URLRequest(url: baseURL.appendingPathComponent("nutrition/estimate"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 8
+        request.timeoutInterval = 120
         request.httpBody = try JSONEncoder().encode(
             NutritionEstimateRequest(text: text, imageBase64: imageBase64)
         )
