@@ -72,3 +72,6 @@ fix_subgroup2.py
 # ── Misc ──
 *.bak
 *.tmp
+
+# ── Local participant exports (contains protected study data) ──
+participants_not_contacted.csv

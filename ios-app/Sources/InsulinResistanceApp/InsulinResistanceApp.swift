@@ -10,6 +10,7 @@ struct InsulinResistanceApp: App {
             RootView()
                 .environmentObject(store)
                 .modelContainer(for: [StoredUserProfile.self, StoredDailyCheckIn.self])
+                .preferredColorScheme(.light)
         }
     }
 }

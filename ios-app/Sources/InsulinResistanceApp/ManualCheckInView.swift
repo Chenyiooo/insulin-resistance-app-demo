@@ -28,27 +28,37 @@ struct ManualCheckInView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    topActions
-                    StepIndicator(currentStep: step, labels: stepLabels)
-                    stageIntro
-                    currentStepContent
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Color.clear
+                            .frame(height: 1)
+                            .id("manual-checkin-top")
+                        header
+                        topActions
+                        StepIndicator(currentStep: step, labels: stepLabels)
+                        stageIntro
+                        currentStepContent
 
-                    HStack(spacing: 14) {
-                        if step > 1 {
-                            OutlineButton(title: "Back") {
-                                step -= 1
+                        HStack(spacing: 14) {
+                            if step > 1 {
+                                OutlineButton(title: "Back") {
+                                    step -= 1
+                                }
+                            }
+                            PrimaryButton(title: step == totalSteps ? "Review check-in" : "Continue") {
+                                continueWithValidation()
                             }
                         }
-                        PrimaryButton(title: step == totalSteps ? "Review check-in" : "Continue") {
-                            continueWithValidation()
-                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 28)
+                }
+                .onChange(of: step) { _, _ in
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("manual-checkin-top", anchor: .top)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 28)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             BottomTabBar()
@@ -60,7 +70,7 @@ struct ManualCheckInView: View {
                 store.saveCheckIn(in: modelContext)
                 isShowingHealthImport = false
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
         }
         .alert("Required answer missing", isPresented: $isShowingMissingDataWarning) {
             Button("Go to first missing") {

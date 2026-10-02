@@ -388,6 +388,7 @@ struct SelectLikeField: View {
 struct AppTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
+            .foregroundStyle(AppColor.ink)
             .padding(.horizontal, 14)
             .frame(height: 54)
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.4)))

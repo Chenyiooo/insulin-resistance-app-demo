@@ -293,7 +293,7 @@ struct AICheckInView: View {
                 store.saveCheckIn(in: modelContext)
                 isShowingHealthImport = false
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
         }
         .onAppear {
             if let requestedField = store.requestedCheckInField {

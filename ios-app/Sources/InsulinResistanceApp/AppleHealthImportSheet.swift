@@ -1,36 +1,41 @@
 import SwiftUI
 
 struct AppleHealthImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var healthKitService = HealthKitService()
     let useData: (HealthImportResult) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Capsule()
-                .fill(AppColor.line)
-                .frame(width: 42, height: 5)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 8)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Apple Health", systemImage: "heart.fill")
+                            .font(.title2.bold())
+                            .foregroundStyle(.red)
+                        Text("Review imported data")
+                            .font(.largeTitle.bold())
+                            .foregroundStyle(AppColor.text)
+                        Text("The app will request Health permission and import available sleep, workouts, weight, and blood pressure. Review the values before using them.")
+                            .font(.callout)
+                            .foregroundStyle(AppColor.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Apple Health", systemImage: "heart.fill")
-                    .font(.title2.bold())
-                    .foregroundStyle(.red)
-                Text("Review imported data")
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(AppColor.text)
-                Text("The app will request Health permission and import available sleep, workouts, weight, and blood pressure. Review the values before using them.")
-                    .font(.callout)
-                    .foregroundStyle(AppColor.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                    content
+                }
+                .padding(22)
+                .frame(maxWidth: .infinity, minHeight: 420, alignment: .topLeading)
             }
-
-            content
-
-            Spacer()
+            .background(Color(red: 0.98, green: 0.99, blue: 1.0))
+            .navigationTitle("Apple Health")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
         }
-        .padding(22)
-        .background(Color(red: 0.98, green: 0.99, blue: 1.0))
         .task {
             if case .idle = healthKitService.state {
                 await healthKitService.requestAndFetchToday()
