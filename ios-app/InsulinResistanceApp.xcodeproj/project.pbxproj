@@ -32,6 +32,7 @@
 		100000000000000000000123 /* NutritionEstimateAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000025 /* NutritionEstimateAPI.swift */; };
 		100000000000000000000124 /* LocalNutritionEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000026 /* LocalNutritionEstimator.swift */; };
 		100000000000000000000125 /* DailyInsightsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000027 /* DailyInsightsAPI.swift */; };
+		100000000000000000000126 /* CheckInReminderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000028 /* CheckInReminderService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +63,7 @@
 		100000000000000000000025 /* NutritionEstimateAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionEstimateAPI.swift; sourceTree = "<group>"; };
 		100000000000000000000026 /* LocalNutritionEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNutritionEstimator.swift; sourceTree = "<group>"; };
 		100000000000000000000027 /* DailyInsightsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyInsightsAPI.swift; sourceTree = "<group>"; };
+		100000000000000000000028 /* CheckInReminderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInReminderService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +93,7 @@
 				100000000000000000000014 /* AppleHealthImportSheet.swift */,
 				100000000000000000000002 /* AppStore.swift */,
 				100000000000000000000003 /* CheckInEntryView.swift */,
+				100000000000000000000028 /* CheckInReminderService.swift */,
 				100000000000000000000004 /* CompletionView.swift */,
 				100000000000000000000027 /* DailyInsightsAPI.swift */,
 				100000000000000000000005 /* DesignSystem.swift */,
@@ -217,6 +220,7 @@
 				100000000000000000000123 /* NutritionEstimateAPI.swift in Sources */,
 				100000000000000000000124 /* LocalNutritionEstimator.swift in Sources */,
 				100000000000000000000125 /* DailyInsightsAPI.swift in Sources */,
+				100000000000000000000126 /* CheckInReminderService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -350,7 +354,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Sources/InsulinResistanceApp/InsulinResistanceApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
@@ -384,7 +388,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Sources/InsulinResistanceApp/InsulinResistanceApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";

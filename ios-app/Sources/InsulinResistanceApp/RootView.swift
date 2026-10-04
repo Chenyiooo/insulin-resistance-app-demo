@@ -4,6 +4,7 @@ import SwiftData
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -28,6 +29,14 @@ struct RootView: View {
         }
         .onAppear {
             store.loadPersistedDataIfNeeded(from: modelContext)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                store.refreshForCurrentDay(from: modelContext)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            store.refreshForCurrentDay(from: modelContext)
         }
     }
 }

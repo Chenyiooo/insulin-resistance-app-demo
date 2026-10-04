@@ -111,6 +111,7 @@ struct ManualCheckInView: View {
                     return
                 }
                 store.checkIn.isCompleted = true
+                store.markTodayCheckInCompleteForReminders()
                 store.saveCheckIn(in: modelContext)
                 store.screen = .completion
             } else {
@@ -387,6 +388,10 @@ struct ManualCheckInView: View {
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
                     TextEditor(text: $store.checkIn.dailyReflection)
+                        .foregroundStyle(AppColor.ink)
+                        .scrollContentBackground(.hidden)
+                        .background(.white)
+                        .colorScheme(.light)
                         .frame(minHeight: 110)
                         .padding(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
@@ -440,6 +445,10 @@ struct ManualCheckInView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppColor.text)
                         TextEditor(text: $foodJournalDescriptionDraft)
+                            .foregroundStyle(AppColor.ink)
+                            .scrollContentBackground(.hidden)
+                            .background(.white)
+                            .colorScheme(.light)
                             .frame(minHeight: 96)
                             .padding(8)
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))

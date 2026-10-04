@@ -389,8 +389,11 @@ struct AppTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .foregroundStyle(AppColor.ink)
+            .colorScheme(.light)
             .padding(.horizontal, 14)
             .frame(height: 54)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.4)))
     }
 }

@@ -96,6 +96,7 @@ final class AppStore: ObservableObject {
     private let dailyInsightsAPI = DailyInsightsAPI()
     private let accountAPI = AccountAPI()
     private var authToken: String?
+    private var activeCheckInDay = Calendar.current.startOfDay(for: Date())
 
     var isSignedIn: Bool {
         authToken != nil
@@ -161,6 +162,7 @@ final class AppStore: ObservableObject {
         refreshLocalRiskAndInsights()
         if authToken != nil {
             cloudSyncMessage = "Signed in as \(accountEmail)"
+            screen = .main
         }
     }
 
@@ -202,6 +204,7 @@ final class AppStore: ObservableObject {
             return
         }
         checkIn.isCompleted = true
+        CheckInReminderService.markTodayComplete()
         refreshFeedbackIfReady()
         screen = .completion
     }
@@ -223,6 +226,28 @@ final class AppStore: ObservableObject {
         normalizeFoodJournalStatus()
         refreshLocalRiskAndInsights()
         hasLoadedPersistedData = true
+        if authToken != nil {
+            refreshCheckInReminders()
+            Task {
+                await loadCloudData(persistingIn: context)
+            }
+        }
+    }
+
+    func refreshForCurrentDay(from context: ModelContext) {
+        let today = Calendar.current.startOfDay(for: Date())
+        guard !Calendar.current.isDate(activeCheckInDay, inSameDayAs: today) else { return }
+
+        activeCheckInDay = today
+        if let todayCheckIn = loadStoredCheckInForToday(from: context) {
+            checkIn = todayCheckIn.dailyCheckIn
+        } else {
+            resetDailyCheckInForNewSession()
+        }
+        normalizeFoodJournalStatus()
+        refreshLocalRiskAndInsights()
+        refreshCheckInReminders()
+
         if authToken != nil {
             Task {
                 await loadCloudData(persistingIn: context)
@@ -463,6 +488,7 @@ final class AppStore: ObservableObject {
         KeychainStore.delete(account: "authToken")
         UserDefaults.standard.removeObject(forKey: "accountEmail")
         UserDefaults.standard.removeObject(forKey: "accountName")
+        CheckInReminderService.clearScheduledReminders()
     }
 
     func deleteAccount() {
@@ -570,6 +596,7 @@ final class AppStore: ObservableObject {
                 KeychainStore.save(response.token, account: "authToken")
                 UserDefaults.standard.set(response.user.email, forKey: "accountEmail")
                 UserDefaults.standard.set(accountName, forKey: "accountName")
+                refreshCheckInReminders()
                 authMessage = isRegistering ? "Account created." : "Signed in."
                 cloudSyncMessage = "Signed in as \(response.user.email)"
                 isAuthenticating = false
@@ -604,7 +631,7 @@ final class AppStore: ObservableObject {
                 }
             }
             if let cloudCheckIn = try await accountAPI.fetchLatestCheckIn(token: authToken),
-               cloudCheckIn.checkInDate == nil || cloudCheckIn.checkInDate == Self.todayString() {
+               cloudCheckIn.checkInDate == Self.todayString() {
                 checkIn = cloudCheckIn.data
                 normalizeFoodJournalStatus()
                 if let context {
@@ -613,11 +640,21 @@ final class AppStore: ObservableObject {
             }
             await refreshWeeklyFeedback()
             refreshFeedbackIfReady()
+            refreshCheckInReminders()
             cloudSyncMessage = "Cloud data loaded."
         } catch {
             cloudSyncMessage = "Could not load cloud data: \(error.localizedDescription)"
         }
         isCloudSyncing = false
+    }
+
+    func markTodayCheckInCompleteForReminders() {
+        CheckInReminderService.markTodayComplete()
+    }
+
+    private func refreshCheckInReminders() {
+        guard authToken != nil else { return }
+        CheckInReminderService.refresh(isTodayComplete: checkIn.isCompleted)
     }
 
     private func syncProfileToCloud() {

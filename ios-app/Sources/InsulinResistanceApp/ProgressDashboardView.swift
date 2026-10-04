@@ -293,7 +293,7 @@ struct WeeklyRiskView: View {
                     Label("Weekly feedback is not ready yet", systemImage: "calendar.badge.clock")
                         .font(.title3.bold())
                         .foregroundStyle(AppColor.text)
-                    Text("Feedback is available after \(store.weeklyFeedback?.requiredDays ?? 7) consecutive completed check-ins from your first day.")
+                    Text("Feedback becomes available on Day \(store.weeklyFeedback?.requiredDays ?? 7), counted from your first completed check-in.")
                         .font(.callout)
                         .foregroundStyle(AppColor.text)
                         .fixedSize(horizontal: false, vertical: true)
@@ -302,7 +302,7 @@ struct WeeklyRiskView: View {
                          : "\(store.weeklyFeedback?.completedDays ?? completedDayCount) of \(store.weeklyFeedback?.requiredDays ?? 7) completed days for this feedback period.")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(AppColor.blue)
-                    Text(isPreviewing ? "Select 7 or 14 days above to inspect the layout." : "The estimate appears after every day in the period has a completed check-in.")
+                    Text(isPreviewing ? "Select 7 or 14 days above to inspect the layout." : "The estimate uses the completed check-ins received during that period.")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -320,7 +320,7 @@ struct WeeklyRiskView: View {
     private var weeklyRiskContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let feedback = store.weeklyFeedback, let result = feedback.riskResult, !isPreviewing {
-                Text("Based on \(feedback.milestoneDay ?? 7) consecutive completed days. Daily measurements are averaged; profile answers use the latest answers in that period.")
+                Text("Based on \(feedback.completedDays) completed check-in days from the first \(feedback.milestoneDay ?? 7) days. Daily measurements are averaged; profile answers use the latest answers in that period.")
                     .font(.callout)
                     .foregroundStyle(AppColor.muted)
                 if let sleep = feedback.averagedFeatures["sleep_hours"] {

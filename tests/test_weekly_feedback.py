@@ -27,10 +27,14 @@ def record(day: date, sleep: float, weight: float = 67.1, completed: bool = True
 def test_seventh_day_uses_seven_day_mean_regardless_of_weekday():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 6 + i, 65 + i) for i in range(7)]
-    assert build_weekly_feedback(list(reversed(records[:6])), SERVICE)["status"] == "waiting"
+    assert build_weekly_feedback(
+        list(reversed(records[:6])), SERVICE, as_of_day=start + timedelta(days=5)
+    )["status"] == "waiting"
 
     with patch.object(SERVICE, "predict", wraps=SERVICE.predict) as predict:
-        result = build_weekly_feedback(list(reversed(records)), SERVICE)
+        result = build_weekly_feedback(
+            list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+        )
     assert predict.call_args.args[0]["features"]["sleep_hours"] == 9
     assert predict.call_args.args[0]["features"]["weight"] == 68
     assert predict.call_args.args[0]["features"]["bmi"] == 68 / (1.676 ** 2)
@@ -46,18 +50,33 @@ def test_seventh_day_uses_seven_day_mean_regardless_of_weekday():
 def test_fourteenth_day_uses_all_fourteen_days_not_just_latest_seven():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 6 if i < 7 else 8) for i in range(14)]
-    result = build_weekly_feedback(list(reversed(records)), SERVICE)
+    result = build_weekly_feedback(
+        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=13)
+    )
     assert result["status"] == "ready"
     assert result["milestone_day"] == 14
     assert result["averaged_features"]["sleep_hours"] == 7
     assert result["measurement_counts"]["sleep_hours"] == 14
 
 
-def test_gap_or_draft_does_not_unlock_feedback():
+def test_seventh_day_feedback_uses_available_completed_days_when_one_is_missing():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 7, completed=i != 3) for i in range(7)]
-    result = build_weekly_feedback(list(reversed(records)), SERVICE)
-    assert result["status"] == "incomplete"
+    result = build_weekly_feedback(
+        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+    )
+    assert result["status"] == "ready"
+    assert result["completed_days"] == 6
+
+
+def test_feedback_unlocks_on_day_seven_without_a_day_seven_checkin():
+    start = date(2026, 9, 22)
+    records = [record(start + timedelta(days=i), 7 + i) for i in range(6)]
+    result = build_weekly_feedback(
+        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+    )
+    assert result["status"] == "ready"
+    assert result["milestone_day"] == 7
     assert result["completed_days"] == 6
 
 
@@ -65,7 +84,9 @@ def test_same_day_edits_count_once_and_latest_edit_wins():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 7) for i in range(7)]
     latest_edit = record(start + timedelta(days=6), 14)
-    result = build_weekly_feedback([latest_edit, *reversed(records)], SERVICE)
+    result = build_weekly_feedback(
+        [latest_edit, *reversed(records)], SERVICE, as_of_day=start + timedelta(days=6)
+    )
     assert result["status"] == "ready"
     assert result["averaged_features"]["sleep_hours"] == 8
 
@@ -76,7 +97,9 @@ def test_weight_mean_uses_actual_measurement_days():
     for item in records[1:6]:
         item["model_payload"]["features"].pop("weight")
     records[-1]["model_payload"]["features"]["weight"] = 69.1
-    result = build_weekly_feedback(list(reversed(records)), SERVICE)
+    result = build_weekly_feedback(
+        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+    )
     assert result["status"] == "ready"
     assert result["measurement_counts"]["weight"] == 2
     assert result["averaged_features"]["weight"] == 68.1

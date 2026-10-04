@@ -624,6 +624,10 @@ struct AICheckInView: View {
                         .foregroundStyle(AppColor.text)
                     TextEditor(text: $foodDescriptionDraft)
                         .focused($focusedInput, equals: .foodDescription)
+                        .foregroundStyle(AppColor.ink)
+                        .scrollContentBackground(.hidden)
+                        .background(.white)
+                        .colorScheme(.light)
                         .frame(minHeight: 92)
                         .padding(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
@@ -1135,6 +1139,7 @@ struct AICheckInView: View {
 
     private func submitReviewedCheckIn() {
         store.checkIn.isCompleted = true
+        store.markTodayCheckInCompleteForReminders()
         store.saveCheckIn(in: modelContext)
         store.screen = .completion
     }
