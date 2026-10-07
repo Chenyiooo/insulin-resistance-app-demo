@@ -621,9 +621,12 @@ final class AppStore: ObservableObject {
 
     private func loadCloudData(persistingIn context: ModelContext? = nil) async {
         guard let authToken else { return }
+        let profileBeforeLoading = profile
+        let checkInBeforeLoading = checkIn
         isCloudSyncing = true
         do {
-            if let cloudProfile = try await accountAPI.fetchProfile(token: authToken) {
+            if let cloudProfile = try await accountAPI.fetchProfile(token: authToken),
+               profile == profileBeforeLoading {
                 profile = cloudProfile
                 let cloudName = cloudProfile.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !cloudName.isEmpty {
@@ -635,6 +638,7 @@ final class AppStore: ObservableObject {
                 }
             }
             if let cloudCheckIn = try await accountAPI.fetchLatestCheckIn(token: authToken),
+               checkIn == checkInBeforeLoading,
                cloudCheckIn.checkInDate == Self.todayString() {
                 checkIn = cloudCheckIn.data
                 normalizeFoodJournalStatus()
@@ -866,7 +870,7 @@ final class AppStore: ObservableObject {
     }
 }
 
-struct UserProfile: Codable {
+struct UserProfile: Codable, Equatable {
     var name: String
     var age: String
     var sexAtBirth: String
@@ -905,7 +909,7 @@ struct UserProfile: Codable {
     }
 }
 
-struct DailyCheckIn: Codable {
+struct DailyCheckIn: Codable, Equatable {
     var weight: String
     var weightUnit: String
     var waist: String

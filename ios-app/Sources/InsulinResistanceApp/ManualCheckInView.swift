@@ -6,6 +6,7 @@ import UIKit
 struct ManualCheckInView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.modelContext) private var modelContext
+    @FocusState private var isReflectionFocused: Bool
     @State private var step = 1
     @State private var isShowingHealthImport = false
     @State private var missingItems: [MissingDataItem] = []
@@ -64,6 +65,15 @@ struct ManualCheckInView: View {
             BottomTabBar()
         }
         .background(.white)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    isReflectionFocused = false
+                    store.saveCheckIn(in: modelContext)
+                }
+            }
+        }
         .sheet(isPresented: $isShowingHealthImport) {
             AppleHealthImportSheet { result in
                 store.applyHealthImport(result)
@@ -374,10 +384,11 @@ struct ManualCheckInView: View {
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
                     TextEditor(text: $store.checkIn.dailyReflection)
-                        .foregroundStyle(AppColor.ink)
+                        .foregroundColor(AppColor.ink)
                         .scrollContentBackground(.hidden)
                         .background(.white)
                         .colorScheme(.light)
+                        .focused($isReflectionFocused)
                         .frame(minHeight: 110)
                         .padding(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))

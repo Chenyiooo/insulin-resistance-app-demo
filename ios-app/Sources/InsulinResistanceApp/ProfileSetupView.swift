@@ -8,6 +8,7 @@ struct ProfileSetupView: View {
     @State private var isShowingMissingDataWarning = false
     @State private var isShowingDeleteAccountConfirmation = false
     @State private var isShowingPrivacyNotice = false
+    @FocusState private var isWaistFieldFocused: Bool
     var isModalFlow = true
 
     var body: some View {
@@ -25,6 +26,7 @@ struct ProfileSetupView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 28)
         }
+        .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.white)
         .alert("Required profile answer missing", isPresented: $isShowingMissingDataWarning) {
@@ -42,6 +44,14 @@ struct ProfileSetupView: View {
         }
         .sheet(isPresented: $isShowingPrivacyNotice) {
             PrivacyNoticeView()
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    isWaistFieldFocused = false
+                }
+            }
         }
     }
 
@@ -247,6 +257,7 @@ struct ProfileSetupView: View {
                     ))
                     .keyboardType(.decimalPad)
                     .textFieldStyle(AppTextFieldStyle())
+                    .focused($isWaistFieldFocused)
                     Picker("Waist unit", selection: Binding(
                         get: { store.profile.waistUnit ?? "in" },
                         set: { store.profile.waistUnit = $0 }
