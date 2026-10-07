@@ -236,38 +236,63 @@ struct ProfileSetupView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("7. What is your waist circumference? *")
+                    .font(.headline)
+                    .foregroundStyle(AppColor.ink)
+                HStack {
+                    TextField("Waist", text: Binding(
+                        get: { store.profile.waist ?? "" },
+                        set: { store.profile.waist = $0 }
+                    ))
+                    .keyboardType(.decimalPad)
+                    .textFieldStyle(AppTextFieldStyle())
+                    Picker("Waist unit", selection: Binding(
+                        get: { store.profile.waistUnit ?? "in" },
+                        set: { store.profile.waistUnit = $0 }
+                    )) {
+                        Text("in").tag("in")
+                        Text("cm").tag("cm")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Text("Measure around your waist just above your hip bones. Keep the tape snug without compressing your skin.")
+                    .font(.caption)
+                    .foregroundStyle(AppColor.muted)
+            }
+
             SingleSelectQuestion(
-                title: "7. Have any of your close biological relatives, such as a biological parent or sibling, been diagnosed with diabetes? *",
+                title: "8. Have any of your close biological relatives, such as a biological parent or sibling, been diagnosed with diabetes? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.familyHistoryDiabetes
             )
 
             SingleSelectQuestion(
-                title: "8. Have you ever been told by a health professional that you have high blood pressure? *",
+                title: "9. Have you ever been told by a health professional that you have high blood pressure? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.hypertensionHistory
             )
 
             SingleSelectQuestion(
-                title: "9. Are you currently taking medication prescribed for high blood pressure? *",
+                title: "10. Are you currently taking medication prescribed for high blood pressure? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.antihypertensiveMedication
             )
 
             SingleSelectQuestion(
-                title: "10. Have you ever been told by a health professional that you have high cholesterol? *",
+                title: "11. Have you ever been told by a health professional that you have high cholesterol? *",
                 options: ["Yes", "No", "Not sure", "Prefer not to answer"],
                 selection: $store.profile.highCholesterol
             )
 
             SingleSelectQuestion(
-                title: "11. Which best describes your current smoking status? *",
+                title: "12. Which best describes your current smoking status? *",
                 options: ["Never smoked", "Formerly smoked", "Currently smoke some days", "Currently smoke every day", "Prefer not to answer"],
                 selection: $store.profile.smokingStatus
             )
 
             SingleSelectQuestion(
-                title: "12. During the past 12 months, how often did you usually drink alcohol? *",
+                title: "13. During the past 12 months, how often did you usually drink alcohol? *",
                 options: ["Never in the past 12 months", "Monthly or less", "2-4 times a month", "2-3 times a week", "4 or more times a week", "Prefer not to answer"],
                 selection: $store.profile.alcoholFrequency
             )

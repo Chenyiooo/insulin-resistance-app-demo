@@ -152,7 +152,6 @@ struct ManualCheckInView: View {
         switch currentStage {
         case 1:
             addRequiredString(&items, field: "weight", label: "Weight", value: store.checkIn.weight)
-            addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: store.checkIn.waist)
             if store.checkIn.hasRecentBloodPressure {
                 addRequiredString(&items, field: "systolic_bp", label: "Systolic blood pressure", value: store.checkIn.systolic)
                 addRequiredString(&items, field: "diastolic_bp", label: "Diastolic blood pressure", value: store.checkIn.diastolic)
@@ -276,19 +275,6 @@ struct ManualCheckInView: View {
                         Text("kg").tag("kg")
                     }
                     .pickerStyle(.segmented)
-                }
-            }
-            SectionCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    FormField(title: "Waist circumference *", text: $store.checkIn.waist, placeholder: "Enter waist")
-                    Picker("Waist unit", selection: $store.checkIn.waistUnit) {
-                        Text("in").tag("in")
-                        Text("cm").tag("cm")
-                    }
-                    .pickerStyle(.segmented)
-                    Text("Measure around your waist just above your hip bones. Keep the tape snug, but do not compress your skin.")
-                        .font(.caption)
-                        .foregroundStyle(AppColor.muted)
                 }
             }
             SectionCard {

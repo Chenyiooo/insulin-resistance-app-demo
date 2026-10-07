@@ -40,7 +40,7 @@ struct ProgressDashboardView: View {
                     }
                     #endif
 
-                    if selectedSegment == 0 {
+                    if selectedSegment == 0 && store.checkIn.isCompleted {
                         PredictionStatusBanner(
                             mode: store.riskPredictionMode,
                             actionTitle: store.hasMissingRequiredData ? "Complete missing info" : nil
@@ -293,7 +293,7 @@ struct WeeklyRiskView: View {
                     Label("Weekly feedback is not ready yet", systemImage: "calendar.badge.clock")
                         .font(.title3.bold())
                         .foregroundStyle(AppColor.text)
-                    Text("Feedback becomes available on Day \(store.weeklyFeedback?.requiredDays ?? 7), counted from your first completed check-in.")
+                    Text("Feedback becomes available on deployment Day \(store.weeklyFeedback?.requiredDays ?? 7). Your onboarding day is not included.")
                         .font(.callout)
                         .foregroundStyle(AppColor.text)
                         .fixedSize(horizontal: false, vertical: true)
@@ -320,7 +320,7 @@ struct WeeklyRiskView: View {
     private var weeklyRiskContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let feedback = store.weeklyFeedback, let result = feedback.riskResult, !isPreviewing {
-                Text("Based on \(feedback.completedDays) completed check-in days from the first \(feedback.milestoneDay ?? 7) days. Daily measurements are averaged; profile answers use the latest answers in that period.")
+                Text("Based on \(feedback.completedDays) completed check-in days from the first \(feedback.milestoneDay ?? 7) deployment days after onboarding. Daily measurements are averaged; profile answers use the latest saved profile.")
                     .font(.callout)
                     .foregroundStyle(AppColor.muted)
                 if let sleep = feedback.averagedFeatures["sleep_hours"] {

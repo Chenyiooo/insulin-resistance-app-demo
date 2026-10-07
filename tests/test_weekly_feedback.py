@@ -27,13 +27,14 @@ def record(day: date, sleep: float, weight: float = 67.1, completed: bool = True
 def test_seventh_day_uses_seven_day_mean_regardless_of_weekday():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 6 + i, 65 + i) for i in range(7)]
+    onboarding = record(start - timedelta(days=1), 2, 40)
     assert build_weekly_feedback(
-        list(reversed(records[:6])), SERVICE, as_of_day=start + timedelta(days=5)
+        list(reversed([onboarding, *records[:6]])), SERVICE, as_of_day=start + timedelta(days=5)
     )["status"] == "waiting"
 
     with patch.object(SERVICE, "predict", wraps=SERVICE.predict) as predict:
         result = build_weekly_feedback(
-            list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+            list(reversed([onboarding, *records])), SERVICE, as_of_day=start + timedelta(days=6)
         )
     assert predict.call_args.args[0]["features"]["sleep_hours"] == 9
     assert predict.call_args.args[0]["features"]["weight"] == 68
@@ -50,8 +51,9 @@ def test_seventh_day_uses_seven_day_mean_regardless_of_weekday():
 def test_fourteenth_day_uses_all_fourteen_days_not_just_latest_seven():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 6 if i < 7 else 8) for i in range(14)]
+    onboarding = record(start - timedelta(days=1), 3)
     result = build_weekly_feedback(
-        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=13)
+        list(reversed([onboarding, *records])), SERVICE, as_of_day=start + timedelta(days=13)
     )
     assert result["status"] == "ready"
     assert result["milestone_day"] == 14
@@ -62,8 +64,9 @@ def test_fourteenth_day_uses_all_fourteen_days_not_just_latest_seven():
 def test_seventh_day_feedback_uses_available_completed_days_when_one_is_missing():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 7, completed=i != 3) for i in range(7)]
+    onboarding = record(start - timedelta(days=1), 3)
     result = build_weekly_feedback(
-        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+        list(reversed([onboarding, *records])), SERVICE, as_of_day=start + timedelta(days=6)
     )
     assert result["status"] == "ready"
     assert result["completed_days"] == 6
@@ -72,8 +75,9 @@ def test_seventh_day_feedback_uses_available_completed_days_when_one_is_missing(
 def test_feedback_unlocks_on_day_seven_without_a_day_seven_checkin():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 7 + i) for i in range(6)]
+    onboarding = record(start - timedelta(days=1), 3)
     result = build_weekly_feedback(
-        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+        list(reversed([onboarding, *records])), SERVICE, as_of_day=start + timedelta(days=6)
     )
     assert result["status"] == "ready"
     assert result["milestone_day"] == 7
@@ -83,9 +87,10 @@ def test_feedback_unlocks_on_day_seven_without_a_day_seven_checkin():
 def test_same_day_edits_count_once_and_latest_edit_wins():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 7) for i in range(7)]
+    onboarding = record(start - timedelta(days=1), 3)
     latest_edit = record(start + timedelta(days=6), 14)
     result = build_weekly_feedback(
-        [latest_edit, *reversed(records)], SERVICE, as_of_day=start + timedelta(days=6)
+        [latest_edit, *reversed([onboarding, *records])], SERVICE, as_of_day=start + timedelta(days=6)
     )
     assert result["status"] == "ready"
     assert result["averaged_features"]["sleep_hours"] == 8
@@ -94,15 +99,33 @@ def test_same_day_edits_count_once_and_latest_edit_wins():
 def test_weight_mean_uses_actual_measurement_days():
     start = date(2026, 9, 22)
     records = [record(start + timedelta(days=i), 7) for i in range(7)]
+    onboarding = record(start - timedelta(days=1), 3)
     for item in records[1:6]:
         item["model_payload"]["features"].pop("weight")
     records[-1]["model_payload"]["features"]["weight"] = 69.1
     result = build_weekly_feedback(
-        list(reversed(records)), SERVICE, as_of_day=start + timedelta(days=6)
+        list(reversed([onboarding, *records])), SERVICE, as_of_day=start + timedelta(days=6)
     )
     assert result["status"] == "ready"
     assert result["measurement_counts"]["weight"] == 2
     assert result["averaged_features"]["weight"] == 68.1
+
+
+def test_profile_waist_overrides_onboarding_and_daily_waist_values():
+    start = date(2026, 9, 22)
+    records = [record(start + timedelta(days=i), 7) for i in range(7)]
+    onboarding = record(start - timedelta(days=1), 3)
+    for item in [onboarding, *records]:
+        item["model_payload"]["features"]["waist_circumference"] = 150
+    with patch.object(SERVICE, "predict", wraps=SERVICE.predict) as predict:
+        result = build_weekly_feedback(
+            list(reversed([onboarding, *records])),
+            SERVICE,
+            as_of_day=start + timedelta(days=6),
+            profile={"waist": "34", "waistUnit": "in"},
+        )
+    assert result["status"] == "ready"
+    assert predict.call_args.args[0]["features"]["waist_circumference"] == 86.36
 
 
 def test_endpoint_only_uses_authenticated_account_history():
@@ -116,7 +139,7 @@ def test_endpoint_only_uses_authenticated_account_history():
             first = storage.create_user("weekly-first@example.com", "password123")
             second = storage.create_user("weekly-second@example.com", "password123")
             start = date(2026, 9, 22)
-            for offset in range(7):
+            for offset in range(-1, 7):
                 item = record(start + timedelta(days=offset), 7 + offset)
                 storage.save_checkin(
                     first["id"], item["checkin_date"], item["data"], item["model_payload"]

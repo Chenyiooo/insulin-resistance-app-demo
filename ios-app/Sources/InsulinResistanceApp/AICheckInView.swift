@@ -141,7 +141,7 @@ struct AICheckInView: View {
     private var orderedSteps: [AIQuestionStep] {
         var steps: [AIQuestionStep] = []
         if store.shouldShowWeeklyCheckIn {
-            steps += [.weight, .waist, .bloodPressureChoice]
+            steps += [.weight, .bloodPressureChoice]
             if store.checkIn.hasRecentBloodPressure {
                 steps += [.bloodPressureSystolic, .bloodPressureDiastolic, .bloodPressureDate]
             }
@@ -247,7 +247,7 @@ struct AICheckInView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    TextField(textPlaceholder, text: $typedAnswer, axis: .vertical)
+                    TextField(textPlaceholder, text: typedAnswerBinding, axis: .vertical)
                         .lineLimit(1...4)
                         .textFieldStyle(AppTextFieldStyle())
                         .focused($focusedInput, equals: .answer)
@@ -310,6 +310,18 @@ struct AICheckInView: View {
                 .isEmpty
             initializeConversationIfNeeded()
         }
+    }
+
+    private var typedAnswerBinding: Binding<String> {
+        Binding(
+            get: { typedAnswer },
+            set: { newValue in
+                typedAnswer = newValue
+                if step == .reflection {
+                    store.checkIn.dailyReflection = newValue
+                }
+            }
+        )
     }
 
     private var cloudyMessage: String {

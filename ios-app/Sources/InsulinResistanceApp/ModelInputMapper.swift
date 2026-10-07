@@ -23,13 +23,13 @@ enum ModelInputMapper {
     static let modelVersion = "low_burden_18_feature_v1"
 
     static let profileInputFeatures = [
-        "age", "sex", "race", "height",
+        "age", "sex", "race", "height", "waist_circumference",
         "family_diabetes", "hypertension_history",
         "hypertension_med", "high_cholesterol", "gestational_diabetes",
     ]
 
     static let checkInInputFeatures = [
-        "weight", "waist_circumference", "systolic_bp", "diastolic_bp",
+        "weight", "systolic_bp", "diastolic_bp",
         "smoking_status", "alcohol_frequency", "sleep_hours",
     ]
 
@@ -139,9 +139,9 @@ enum ModelInputMapper {
         )
 
         let weightKg = weightKilograms(value: checkIn.weight, unit: checkIn.weightUnit)
-        let waistCm = waistCentimeters(value: checkIn.waist, unit: checkIn.waistUnit)
+        let waistCm = waistCentimeters(value: profile.waist ?? "", unit: profile.waistUnit ?? "in")
         assign(&checkInInputs, key: "weight", value: weightKg, missing: &missing, label: "Weight")
-        assign(&checkInInputs, key: "waist_circumference", value: waistCm, missing: &missing, label: "Waist circumference")
+        assign(&profileInputs, key: "waist_circumference", value: waistCm, missing: &missing, label: "Waist circumference")
 
         if checkIn.hasRecentBloodPressure {
             assign(&checkInInputs, key: "systolic_bp", value: parseDouble(checkIn.systolic), missing: &missing, label: "Systolic blood pressure")

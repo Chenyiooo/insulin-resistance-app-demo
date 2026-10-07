@@ -310,7 +310,12 @@ def get_latest_checkin(current: dict[str, Any] = Depends(current_user)) -> dict[
 
 @app.get("/me/weekly-feedback")
 def get_my_weekly_feedback(current: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    return build_weekly_feedback(storage.list_checkins(current["id"], limit=1000), service)
+    stored_profile = storage.get_profile(current["id"])
+    return build_weekly_feedback(
+        storage.list_checkins(current["id"], limit=1000),
+        service,
+        profile=stored_profile["data"] if stored_profile else None,
+    )
 
 
 @app.post("/nutrition/estimate", response_model=NutritionEstimateResponse)

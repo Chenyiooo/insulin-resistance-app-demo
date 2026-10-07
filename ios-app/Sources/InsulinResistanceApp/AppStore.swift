@@ -44,7 +44,7 @@ enum RiskPredictionMode {
         case .remoteModel:
             return "LightGBM model estimate"
         case .unavailable:
-            return "Local fallback estimate"
+            return "Risk estimate unavailable"
         }
     }
 
@@ -125,6 +125,10 @@ final class AppStore: ObservableObject {
 
     var hasMissingRequiredData: Bool {
         !missingRequiredItems.isEmpty
+    }
+
+    var needsWaistProfileUpdate: Bool {
+        (profile.waist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var hasStartedTodayCheckIn: Bool {
@@ -355,7 +359,7 @@ final class AppStore: ObservableObject {
         }
         let payload = currentModelInputPayload
         if !payload.missingRequiredInputs.isEmpty {
-            riskPredictionMode = .unavailable("Complete required model inputs to use the trained prediction model.")
+            riskPredictionMode = .unavailable("The trained model could not generate an estimate from the answers provided. Your check-in is still saved.")
             syncCheckInToCloud()
             return
         }
@@ -722,6 +726,7 @@ final class AppStore: ObservableObject {
         }
         addRequiredString(&items, field: "height_feet", label: "Height feet", value: profile.heightFeet)
         addRequiredString(&items, field: "height_inches", label: "Height inches", value: profile.heightInches)
+        addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: profile.waist ?? "")
         addRequiredChoice(&items, field: "family_history_diabetes", label: "Family history of diabetes", value: profile.familyHistoryDiabetes)
         addRequiredChoice(&items, field: "hypertension_history", label: "Hypertension history", value: profile.hypertensionHistory)
         addRequiredChoice(&items, field: "antihypertensive_medication", label: "Antihypertensive medication use", value: profile.antihypertensiveMedication)
@@ -735,7 +740,6 @@ final class AppStore: ObservableObject {
         var items: [MissingDataItem] = []
         if shouldShowWeeklyCheckIn {
             addRequiredString(&items, field: "weight", label: "Weight", value: checkIn.weight)
-            addRequiredString(&items, field: "waist_circumference", label: "Waist circumference", value: checkIn.waist)
             if checkIn.hasRecentBloodPressure {
                 addRequiredString(&items, field: "systolic_bp", label: "Systolic blood pressure", value: checkIn.systolic)
                 addRequiredString(&items, field: "diastolic_bp", label: "Diastolic blood pressure", value: checkIn.diastolic)
@@ -871,6 +875,8 @@ struct UserProfile: Codable {
     var raceEthnicity: [String]
     var heightFeet: String
     var heightInches: String
+    var waist: String?
+    var waistUnit: String?
     var familyHistoryDiabetes: String
     var hypertensionHistory: String
     var antihypertensiveMedication: String
@@ -888,6 +894,7 @@ struct UserProfile: Codable {
             "race_ethnicity": raceEthnicity.isEmpty ? 0 : 1,
             "height_feet": answeredFeatureFlag(heightFeet),
             "height_inches": answeredFeatureFlag(heightInches),
+            "waist_circumference": answeredFeatureFlag(waist ?? ""),
             "family_history_diabetes": answeredFeatureFlag(familyHistoryDiabetes),
             "hypertension_history": answeredFeatureFlag(hypertensionHistory),
             "antihypertensive_medication": answeredFeatureFlag(antihypertensiveMedication),
@@ -1117,6 +1124,8 @@ enum MockData {
         raceEthnicity: [],
         heightFeet: "",
         heightInches: "",
+        waist: nil,
+        waistUnit: "in",
         familyHistoryDiabetes: "",
         hypertensionHistory: "",
         antihypertensiveMedication: "",

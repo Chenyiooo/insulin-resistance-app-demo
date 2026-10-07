@@ -63,8 +63,8 @@ enum LocalRiskEngine {
             }
         }
 
-        if let waist = double(checkIn.waist) {
-            let waistIn = checkIn.waistUnit == "cm" ? waist / 2.54 : waist
+        if let waist = double(profile.waist ?? "") {
+            let waistIn = profile.waistUnit == "cm" ? waist / 2.54 : waist
             if waistIn >= 40 {
                 score += 12
                 increasing.append("Higher waist circumference")

@@ -42,6 +42,8 @@ final class StoredUserProfile {
     var raceEthnicityJSON: String
     var heightFeet: String
     var heightInches: String
+    var waist: String = ""
+    var waistUnit: String = "in"
     var familyHistoryDiabetes: String
     var hypertensionHistory: String
     var antihypertensiveMedication: String
@@ -60,6 +62,8 @@ final class StoredUserProfile {
         self.raceEthnicityJSON = Self.encodeStrings(profile.raceEthnicity)
         self.heightFeet = profile.heightFeet
         self.heightInches = profile.heightInches
+        self.waist = profile.waist ?? ""
+        self.waistUnit = profile.waistUnit ?? "in"
         self.familyHistoryDiabetes = profile.familyHistoryDiabetes
         self.hypertensionHistory = profile.hypertensionHistory
         self.antihypertensiveMedication = profile.antihypertensiveMedication
@@ -79,6 +83,8 @@ final class StoredUserProfile {
         raceEthnicityJSON = Self.encodeStrings(profile.raceEthnicity)
         heightFeet = profile.heightFeet
         heightInches = profile.heightInches
+        waist = profile.waist ?? ""
+        waistUnit = profile.waistUnit ?? "in"
         familyHistoryDiabetes = profile.familyHistoryDiabetes
         hypertensionHistory = profile.hypertensionHistory
         antihypertensiveMedication = profile.antihypertensiveMedication
@@ -99,6 +105,8 @@ final class StoredUserProfile {
             raceEthnicity: Self.decodeStrings(raceEthnicityJSON),
             heightFeet: heightFeet,
             heightInches: heightInches,
+            waist: waist,
+            waistUnit: waistUnit,
             familyHistoryDiabetes: familyHistoryDiabetes,
             hypertensionHistory: hypertensionHistory,
             antihypertensiveMedication: antihypertensiveMedication,

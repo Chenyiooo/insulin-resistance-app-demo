@@ -26,6 +26,23 @@ struct HomeView: View {
                 }
                 .padding(.top, 36)
 
+                if store.needsWaistProfileUpdate {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Profile update required", systemImage: "person.crop.circle.badge.exclamationmark")
+                                .font(.headline)
+                                .foregroundStyle(AppColor.ink)
+                            Text("Please add or confirm your waist circumference before your next check-in so future feedback uses the correct measurement.")
+                                .font(.callout)
+                                .foregroundStyle(AppColor.text)
+                            PrimaryButton(title: "Update Waist in Profile") {
+                                store.showMain(tab: .profile)
+                            }
+                        }
+                    }
+                    .background(AppColor.sky)
+                }
+
                 SectionCard {
                     VStack(alignment: .leading, spacing: 24) {
                         Text(checkInTitle)
@@ -55,7 +72,7 @@ struct HomeView: View {
                             Label("Day \(day) feedback is ready", systemImage: "chart.line.uptrend.xyaxis")
                                 .font(.headline)
                                 .foregroundStyle(AppColor.ink)
-                            Text("Your estimate uses your completed check-ins from the first \(day) days.")
+                            Text("Your estimate uses completed check-ins from the first \(day) deployment days after onboarding.")
                                 .font(.callout)
                                 .foregroundStyle(AppColor.muted)
                             PrimaryButton(title: "View Feedback") {

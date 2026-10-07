@@ -7,7 +7,7 @@ from backend.service import ModelInputError, RiskPredictionService, prediction_t
 
 
 AVERAGED_FEATURES = (
-    "weight", "waist_circumference", "systolic_bp", "diastolic_bp", "sleep_hours"
+    "weight", "systolic_bp", "diastolic_bp", "sleep_hours"
 )
 
 
@@ -15,6 +15,7 @@ def build_weekly_feedback(
     checkins: list[dict[str, Any]],
     service: RiskPredictionService,
     as_of_day: date | None = None,
+    profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # The database returns newest entries first, including multiple edits on one date.
     completed_by_day: dict[date, dict[str, Any]] = {}
@@ -30,7 +31,8 @@ def build_weekly_feedback(
     if not completed_by_day:
         return _response("waiting", None, None, 0, 0)
 
-    first_day = min(completed_by_day)
+    onboarding_day = min(completed_by_day)
+    first_day = onboarding_day + timedelta(days=1)
     effective_day = as_of_day or date.today()
     elapsed_days = (effective_day - first_day).days + 1
     milestone = 14 if elapsed_days >= 14 else 7 if elapsed_days >= 7 else None
@@ -52,6 +54,9 @@ def build_weekly_feedback(
         return _response("unavailable", first_day, milestone, len(records), milestone)
 
     features = dict(payloads[-1]["features"])
+    profile_waist_cm = _profile_waist_centimeters(profile)
+    if profile_waist_cm is not None:
+        features["waist_circumference"] = profile_waist_cm
     averages: dict[str, float] = {}
     counts: dict[str, int] = {}
     for key in AVERAGED_FEATURES:
@@ -93,6 +98,19 @@ def build_weekly_feedback(
         ],
     )
     return response
+
+
+def _profile_waist_centimeters(profile: dict[str, Any] | None) -> float | None:
+    if not profile:
+        return None
+    raw = profile.get("waist")
+    try:
+        waist = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if waist <= 0:
+        return None
+    return waist if profile.get("waistUnit") == "cm" else waist * 2.54
 
 
 def _response(
