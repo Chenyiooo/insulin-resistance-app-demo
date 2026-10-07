@@ -48,8 +48,11 @@ struct ProfileSetupView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") {
+                Button(isModalFlow ? "Done" : "Save Waist") {
                     isWaistFieldFocused = false
+                    if !isModalFlow {
+                        saveProfileWithValidation()
+                    }
                 }
             }
         }
