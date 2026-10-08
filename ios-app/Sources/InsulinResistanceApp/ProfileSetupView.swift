@@ -74,6 +74,25 @@ struct ProfileSetupView: View {
         }
     }
 
+    private func saveWaistAndDismissKeyboard() {
+        isWaistFieldFocused = false
+        guard !isModalFlow else { return }
+
+        let waist = (store.profile.waist ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Double(waist), value > 0 else {
+            missingItems = [
+                MissingDataItem(
+                    field: "waist_circumference",
+                    label: "Waist circumference",
+                    code: MissingDataCode.missing
+                )
+            ]
+            isShowingMissingDataWarning = true
+            return
+        }
+        store.saveProfile(in: modelContext)
+    }
+
     private var header: some View {
         HStack {
             Button {
@@ -269,6 +288,18 @@ struct ProfileSetupView: View {
                         Text("cm").tag("cm")
                     }
                     .pickerStyle(.segmented)
+                    Button {
+                        saveWaistAndDismissKeyboard()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(AppColor.blue)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Save waist and close keyboard")
                 }
                 Text("Measure around your waist just above your hip bones. Keep the tape snug without compressing your skin.")
                     .font(.caption)

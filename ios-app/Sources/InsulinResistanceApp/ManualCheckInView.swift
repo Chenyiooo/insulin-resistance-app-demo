@@ -17,6 +17,7 @@ struct ManualCheckInView: View {
     @State private var foodJournalDescriptionDraft = ""
     @State private var isShowingActivityPrototypeNote = false
     @State private var additionalActivities: [AdditionalActivityDraft] = []
+    @State private var isShowingSubmissionError = false
     private var totalSteps: Int {
         store.shouldShowWeeklyCheckIn ? 4 : 3
     }
@@ -47,9 +48,10 @@ struct ManualCheckInView: View {
                                     step -= 1
                                 }
                             }
-                            PrimaryButton(title: step == totalSteps ? "Review check-in" : "Continue") {
+                            PrimaryButton(title: step == totalSteps ? (store.isSubmittingCheckIn ? "Uploading..." : "Submit Check-in") : "Continue") {
                                 continueWithValidation()
                             }
+                            .disabled(store.isSubmittingCheckIn)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -90,6 +92,11 @@ struct ManualCheckInView: View {
         } message: {
             Text(missingDataMessage)
         }
+        .alert("Check-in not uploaded", isPresented: $isShowingSubmissionError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(store.checkInSubmissionError ?? "Please try again.")
+        }
         .onAppear {
             if let requestedField = store.requestedCheckInField {
                 step = stepForMissingField(requestedField)
@@ -120,10 +127,13 @@ struct ManualCheckInView: View {
                     isShowingMissingDataWarning = true
                     return
                 }
-                store.checkIn.isCompleted = true
-                store.markTodayCheckInCompleteForReminders()
-                store.saveCheckIn(in: modelContext)
-                store.screen = .completion
+                Task {
+                    if await store.submitCompletedCheckIn(in: modelContext) {
+                        store.screen = .completion
+                    } else {
+                        isShowingSubmissionError = true
+                    }
+                }
             } else {
                 store.saveCheckIn(in: modelContext)
                 step += 1

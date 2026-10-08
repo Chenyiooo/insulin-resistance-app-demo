@@ -206,31 +206,59 @@ def save_checkin(
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     now = utc_now()
-    checkin_id = str(uuid.uuid4())
     normalized_source = _normalize_source(source)
     with connect() as conn:
-        _execute(
+        existing = _execute(
             conn,
             """
-            INSERT INTO checkins (
-                id, user_id, checkin_date, source, provenance_json, data_json,
-                model_payload_json, risk_result_json, created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT id, created_at FROM checkins
+            WHERE user_id = ? AND checkin_date = ?
+            ORDER BY created_at DESC
+            LIMIT 1
             """,
-            (
-                checkin_id,
-                user_id,
-                checkin_date,
-                normalized_source,
-                json.dumps(provenance) if provenance is not None else None,
-                json.dumps(data),
-                json.dumps(model_payload) if model_payload is not None else None,
-                json.dumps(risk_result) if risk_result is not None else None,
-                now,
-                now,
-            ),
-        )
+            (user_id, checkin_date),
+        ).fetchone()
+        if existing is None:
+            checkin_id = str(uuid.uuid4())
+            created_at = now
+            _execute(
+                conn,
+                """
+                INSERT INTO checkins (
+                    id, user_id, checkin_date, source, provenance_json, data_json,
+                    model_payload_json, risk_result_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    checkin_id, user_id, checkin_date, normalized_source,
+                    json.dumps(provenance) if provenance is not None else None,
+                    json.dumps(data),
+                    json.dumps(model_payload) if model_payload is not None else None,
+                    json.dumps(risk_result) if risk_result is not None else None,
+                    created_at, now,
+                ),
+            )
+        else:
+            checkin_id = existing["id"]
+            created_at = existing["created_at"]
+            _execute(
+                conn,
+                """
+                UPDATE checkins
+                SET source = ?, provenance_json = ?, data_json = ?,
+                    model_payload_json = ?, risk_result_json = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    normalized_source,
+                    json.dumps(provenance) if provenance is not None else None,
+                    json.dumps(data),
+                    json.dumps(model_payload) if model_payload is not None else None,
+                    json.dumps(risk_result) if risk_result is not None else None,
+                    now, checkin_id,
+                ),
+            )
     return {
         "id": checkin_id,
         "checkin_date": checkin_date,
@@ -239,7 +267,7 @@ def save_checkin(
         "data": data,
         "model_payload": model_payload,
         "risk_result": risk_result,
-        "created_at": now,
+        "created_at": created_at,
         "updated_at": now,
     }
 

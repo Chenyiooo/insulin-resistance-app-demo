@@ -82,6 +82,8 @@ final class AppStore: ObservableObject {
     @Published var cloudSyncMessage = ""
     @Published var isAuthenticating = false
     @Published var isCloudSyncing = false
+    @Published var isSubmittingCheckIn = false
+    @Published var checkInSubmissionError: String?
     @Published var isEstimatingNutrition = false
     @Published var nutritionEstimateMessage = ""
     @Published var dailyInsightsSource = "Local rules"
@@ -234,6 +236,7 @@ final class AppStore: ObservableObject {
             refreshCheckInReminders()
             Task {
                 await loadCloudData(persistingIn: context)
+                await retryCompletedLocalCheckIns(in: context)
             }
         }
     }
@@ -269,7 +272,49 @@ final class AppStore: ObservableObject {
 
     func saveCheckIn(in context: ModelContext) {
         upsertCheckIn(checkIn, in: context)
-        refreshFeedbackIfReady()
+        if checkIn.isCompleted {
+            refreshFeedbackIfReady()
+        }
+    }
+
+    func submitCompletedCheckIn(in context: ModelContext) async -> Bool {
+        guard let authToken else {
+            checkInSubmissionError = "Please log in again before submitting your check-in."
+            return false
+        }
+        guard canGenerateDailyFeedback else {
+            checkInSubmissionError = "Please complete all required answers before submitting."
+            return false
+        }
+
+        checkIn.isCompleted = true
+        upsertCheckIn(checkIn, in: context)
+        let submittedCheckIn = checkIn
+        let submittedPayload = currentModelInputPayload
+        isSubmittingCheckIn = true
+        checkInSubmissionError = nil
+        defer { isSubmittingCheckIn = false }
+
+        do {
+            try await accountAPI.saveCheckIn(
+                submittedCheckIn,
+                token: authToken,
+                checkInDate: Self.todayString(),
+                modelPayload: submittedPayload,
+                riskResult: nil,
+                source: checkInSource,
+                provenance: checkInProvenance
+            )
+            cloudSyncMessage = "Check-in synced to cloud."
+            CheckInReminderService.markTodayComplete()
+            refreshFeedbackIfReady()
+            await refreshWeeklyFeedback()
+            return true
+        } catch {
+            checkInSubmissionError = "Your answers are saved on this phone, but could not be uploaded. Check your connection and tap Submit again."
+            cloudSyncMessage = "Check-in sync failed: \(error.localizedDescription)"
+            return false
+        }
     }
 
     func refreshLocalRiskAndInsights() {
@@ -704,6 +749,46 @@ final class AppStore: ObservableObject {
         }
     }
 
+    private func retryCompletedLocalCheckIns(in context: ModelContext) async {
+        guard let authToken else { return }
+        let descriptor = FetchDescriptor<StoredDailyCheckIn>(
+            sortBy: [SortDescriptor(\.checkInDate, order: .forward)]
+        )
+        guard let records = try? context.fetch(descriptor) else { return }
+        let remoteCheckIns: [CheckInEnvelope<DailyCheckIn>]
+        do {
+            remoteCheckIns = try await accountAPI.fetchCheckIns(token: authToken)
+        } catch {
+            cloudSyncMessage = "Saved check-ins will retry when the server is available."
+            return
+        }
+        let completedRemoteDates = Set(
+            remoteCheckIns.compactMap { envelope in
+                envelope.data.isCompleted ? envelope.checkInDate : nil
+            }
+        )
+
+        for record in records where record.isCompleted {
+            let checkInDate = Self.checkInDateString(record.checkInDate)
+            guard !completedRemoteDates.contains(checkInDate) else { continue }
+            let savedCheckIn = record.dailyCheckIn
+            do {
+                try await accountAPI.saveCheckIn(
+                    savedCheckIn,
+                    token: authToken,
+                    checkInDate: checkInDate,
+                    modelPayload: ModelInputMapper.makePayload(profile: profile, checkIn: savedCheckIn),
+                    riskResult: nil,
+                    source: "manual_entry",
+                    provenance: [:]
+                )
+            } catch {
+                cloudSyncMessage = "Some saved check-ins are waiting to sync: \(error.localizedDescription)"
+                return
+            }
+        }
+    }
+
     private func applyRemoteRiskPrediction(_ response: RiskPredictionResponse) {
         weeklyRisk = WeeklyRisk(
             score: response.percent,
@@ -829,11 +914,15 @@ final class AppStore: ObservableObject {
     private static let isoDateFormatter = ISO8601DateFormatter()
 
     private static func todayString() -> String {
+        checkInDateString(Date())
+    }
+
+    private static func checkInDateString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
+        return formatter.string(from: date)
     }
 
     private func iconName(for domain: String) -> String {

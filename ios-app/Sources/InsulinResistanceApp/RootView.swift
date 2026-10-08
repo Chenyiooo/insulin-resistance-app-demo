@@ -61,7 +61,6 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             BottomTabBar()
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
 

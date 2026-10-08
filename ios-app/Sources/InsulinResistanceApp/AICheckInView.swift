@@ -231,9 +231,10 @@ struct AICheckInView: View {
                         isReviewingSummary = false
                         move(to: .reflection)
                     }
-                    PrimaryButton(title: "Submit Check-in") {
+                    PrimaryButton(title: store.isSubmittingCheckIn ? "Uploading..." : "Submit Check-in") {
                         submitReviewedCheckIn()
                     }
+                    .disabled(store.isSubmittingCheckIn)
                 } else {
                     if canMoveBack {
                         Button {
@@ -294,6 +295,17 @@ struct AICheckInView: View {
                 isShowingHealthImport = false
             }
             .presentationDetents([.large])
+        }
+        .alert(
+            "Check-in not uploaded",
+            isPresented: Binding(
+                get: { store.checkInSubmissionError != nil },
+                set: { if !$0 { store.checkInSubmissionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(store.checkInSubmissionError ?? "Please try again.")
         }
         .onAppear {
             if let requestedField = store.requestedCheckInField {
@@ -1150,10 +1162,11 @@ struct AICheckInView: View {
     }
 
     private func submitReviewedCheckIn() {
-        store.checkIn.isCompleted = true
-        store.markTodayCheckInCompleteForReminders()
-        store.saveCheckIn(in: modelContext)
-        store.screen = .completion
+        Task {
+            if await store.submitCompletedCheckIn(in: modelContext) {
+                store.screen = .completion
+            }
+        }
     }
 
     private var reviewSummaryMessage: String {

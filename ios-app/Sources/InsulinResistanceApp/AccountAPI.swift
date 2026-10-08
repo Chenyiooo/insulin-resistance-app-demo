@@ -141,6 +141,12 @@ struct AccountAPI {
         throw decodeServerError(data: data, statusCode: httpResponse.statusCode)
     }
 
+    func fetchCheckIns(token: String) async throws -> [CheckInEnvelope<DailyCheckIn>] {
+        let request = authorizedRequest(path: "me/checkins", token: token)
+        let data = try await validatedData(for: request)
+        return try JSONDecoder().decode([CheckInEnvelope<DailyCheckIn>].self, from: data)
+    }
+
     func fetchWeeklyFeedback(token: String) async throws -> WeeklyFeedbackResponse {
         let request = authorizedRequest(path: "me/weekly-feedback", token: token)
         let data = try await validatedData(for: request)
@@ -150,6 +156,7 @@ struct AccountAPI {
     func saveCheckIn(
         _ checkIn: DailyCheckIn,
         token: String,
+        checkInDate: String? = nil,
         modelPayload: ModelInputPayload,
         riskResult: RiskPredictionResponse?,
         source: String,
@@ -161,7 +168,7 @@ struct AccountAPI {
         request.httpBody = try JSONEncoder().encode(
             CheckInEnvelope(
                 id: nil,
-                checkInDate: Self.todayString(),
+                checkInDate: checkInDate ?? Self.todayString(),
                 source: source,
                 provenance: provenance.isEmpty ? nil : provenance,
                 data: checkIn,

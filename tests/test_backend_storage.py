@@ -55,6 +55,17 @@ class BackendStorageTest(unittest.TestCase):
         self.assertEqual(latest["source"], "apple_health_confirmed")
         self.assertEqual(latest["provenance"]["imported_fields"], "sleep_hours,physical_activity")
 
+        updated = storage.save_checkin(
+            user_id=user["id"],
+            checkin_date="2026-08-12",
+            data={"sleepHours": "8", "isCompleted": True},
+            model_payload={"features": {"age": 34, "sleep_hours": 8}},
+            risk_result={"percent": 18},
+        )
+        self.assertEqual(updated["id"], checkin["id"])
+        self.assertEqual(len(storage.list_checkins(user["id"])), 1)
+        self.assertEqual(storage.latest_checkin(user["id"])["data"]["sleepHours"], "8")
+
         storage.delete_session(token)
         self.assertIsNone(storage.get_user_for_token(token))
 
