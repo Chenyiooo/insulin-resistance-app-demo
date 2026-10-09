@@ -354,16 +354,16 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Sources/InsulinResistanceApp/InsulinResistanceApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
 				INFOPLIST_KEY_IRAPIBaseURL = "https://insulin-resistance-api.onrender.com";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app requires access to record your health and glucose data.";
-				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -388,16 +388,16 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Sources/InsulinResistanceApp/InsulinResistanceApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Insulin Resistance";
 				INFOPLIST_KEY_IRAPIBaseURL = "https://insulin-resistance-api.onrender.com";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads sleep, workouts, weight, and blood pressure from Apple Health to help fill in your check-in.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app requires access to record your health and glucose data.";
-				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

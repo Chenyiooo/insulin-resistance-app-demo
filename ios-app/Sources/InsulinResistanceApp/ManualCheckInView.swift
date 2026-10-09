@@ -18,6 +18,7 @@ struct ManualCheckInView: View {
     @State private var isShowingActivityPrototypeNote = false
     @State private var additionalActivities: [AdditionalActivityDraft] = []
     @State private var isShowingSubmissionError = false
+    @State private var reflectionDraft = ""
     private var totalSteps: Int {
         store.shouldShowWeeklyCheckIn ? 4 : 3
     }
@@ -64,13 +65,16 @@ struct ManualCheckInView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            BottomTabBar()
+            if !isReflectionFocused {
+                BottomTabBar()
+            }
         }
         .background(.white)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") {
+                    commitReflectionDraft()
                     isReflectionFocused = false
                     store.saveCheckIn(in: modelContext)
                 }
@@ -105,6 +109,7 @@ struct ManualCheckInView: View {
                 step = stepForMissingField(firstMissing.field)
             }
             foodJournalDescriptionDraft = store.checkIn.foodJournalDescription
+            reflectionDraft = store.checkIn.dailyReflection
             isFoodJournalDescriptionVisible = !store.checkIn.foodJournalDescription
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty
@@ -119,6 +124,7 @@ struct ManualCheckInView: View {
 
     private func continueWithValidation() {
         commitFoodJournalDescription()
+        commitReflectionDraft()
         missingItems = currentStepMissingDataItems()
         if missingItems.isEmpty {
             if step == totalSteps {
@@ -393,15 +399,21 @@ struct ManualCheckInView: View {
                     Text("Prompts: What stood out to you today? Did anything surprise you? Did you notice any connection among your activity, movement breaks, sleep, food, stress, energy, or symptoms?")
                         .font(.caption)
                         .foregroundStyle(AppColor.muted)
-                    TextEditor(text: $store.checkIn.dailyReflection)
+                    TextEditor(text: $reflectionDraft)
                         .foregroundColor(AppColor.ink)
                         .scrollContentBackground(.hidden)
                         .background(.white)
                         .colorScheme(.light)
                         .focused($isReflectionFocused)
-                        .frame(minHeight: 110)
+                        .frame(height: 130)
                         .padding(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppColor.line))
+                        .onChange(of: isReflectionFocused) { _, isFocused in
+                            if !isFocused {
+                                commitReflectionDraft()
+                                store.saveCheckIn(in: modelContext)
+                            }
+                        }
                 }
             }
         }
@@ -638,6 +650,12 @@ struct ManualCheckInView: View {
             store.checkIn.foodJournalDescription = draft
         }
         updateFoodJournalStatus()
+    }
+
+    private func commitReflectionDraft() {
+        if store.checkIn.dailyReflection != reflectionDraft {
+            store.checkIn.dailyReflection = reflectionDraft
+        }
     }
 
     private func clearNutritionEstimate() {
